@@ -317,6 +317,53 @@ class EnvRobosuite(EB.EnvBase):
 
         # Takes a point in world, transforms to camera frame, and then projects onto image plane.
         return K_exp @ T.pose_inv(R)
+    
+
+    def project_points_from_world_to_camera(self, points, world_to_camera_transform, camera_height, camera_width):
+        """
+        Helper function to project a batch of points in the world frame
+        into camera pixels using the world to camera transformation.
+
+        Args:
+            points (np.array): 3D points in world frame to project onto camera pixel locations. Should
+                be shape [..., 3].
+            world_to_camera_transform (np.array): 4x4 Tensor to go from robot coordinates to pixel
+                coordinates.
+            camera_height (int): height of the camera image
+            camera_width (int): width of the camera image
+
+        Return:
+            pixels (np.array): projected pixel indices of shape [..., 2]
+        """
+        assert points.shape[-1] == 3  # last dimension must be 3D
+        assert len(world_to_camera_transform.shape) == 2
+        assert world_to_camera_transform.shape[0] == 4 and world_to_camera_transform.shape[1] == 4
+
+        # convert points to homogenous coordinates -> (px, py, pz, 1)
+        ones_pad = np.ones(points.shape[:-1] + (1,))
+        points = np.concatenate((points, ones_pad), axis=-1)  # shape [..., 4]
+
+        # batch matrix multiplication of 4 x 4 matrix and 4 x 1 vectors to do robot frame to pixels transform
+        mat_reshape = [1] * len(points.shape[:-1]) + [4, 4]
+        cam_trans = world_to_camera_transform.reshape(mat_reshape)  # shape [..., 4, 4]
+        pixels = np.matmul(cam_trans, points[..., None])[..., 0]  # shape [..., 4]
+
+        # re-scaling from homogenous coordinates to recover pixel values
+        # (x, y, z) -> (x / z, y / z)
+        pixels = pixels / pixels[..., 2:3]
+        pixels = pixels[..., :2].round().astype(int)  # shape [..., 2]
+
+        # swap first and second coordinates to get pixel indices that correspond to (height, width)
+        # and also clip pixels that are out of range of the camera image
+        pixels = np.concatenate(
+            (
+                pixels[..., 1:2].clip(0, camera_height - 1),
+                pixels[..., 0:1].clip(0, camera_width - 1),
+            ),
+            axis=-1,
+        )
+
+        return pixels
 
     def get_state(self):
         """

@@ -445,7 +445,8 @@ class GL_VAE(GL):
             loss_log["Encoder_Variance"] = info["encoder_variance"].mean().item()
         return loss_log
 
-    def get_subgoal_predictions(self, obs_dict, goal_dict=None):
+    def get_subgoal_predictions(self, obs_dict, goal_dict=None, return_all_samples=False):
+    # def get_subgoal_predictions(self, obs_dict, goal_dict=None):
         """
         Takes a batch of observations and predicts a batch of subgoals.
 
@@ -467,8 +468,13 @@ class GL_VAE(GL):
             return OrderedDict(latent_subgoal=latent_subgoals)
 
         # sample a single goal from the VAE
-        goals = self.sample_subgoals(obs_dict=obs_dict, goal_dict=goal_dict, num_samples=1)
-        return { k : goals[k][:, 0, ...] for k in goals }
+        goals = self.sample_subgoals(obs_dict=obs_dict, goal_dict=goal_dict, num_samples=10)
+
+        if return_all_samples:
+            return { k: goals[k] for k in goals }
+        
+        else:
+            return { k : goals[k][:, 0, ...] for k in goals }
 
     def sample_subgoals(self, obs_dict, goal_dict=None, num_samples=1):
         """

@@ -57,16 +57,108 @@ import h5py
 import imageio
 import numpy as np
 from copy import deepcopy
-
+import pdb
+import matplotlib.pyplot as plt
 import torch
 
 import robomimic
+import robomimic.utils.camera_utils as CameraUtils
 import robomimic.utils.file_utils as FileUtils
 import robomimic.utils.torch_utils as TorchUtils
 import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.obs_utils as ObsUtils
 from robomimic.envs.env_base import EnvBase
 from robomimic.algo import RolloutPolicy
+
+
+def plot_array(data, title):
+    """
+    Plot a given numpy array of size (n,) as a line plot.
+
+    Args:
+        data (np.array): A numpy array of size (n,).
+    """
+    plt.figure(figsize=(10, 6))
+    plt.plot(data, linestyle='-', marker='o', color='b')
+    plt.grid(True)
+    plt.title(title)
+    plt.xlabel('Index')
+    plt.ylabel('Value')
+    plt.show()
+
+
+def calculate_max_column_variance(subgoal_data):
+    """
+    Calculate the maximum column-wise variance for each (10, 3) array in the provided list of arrays.
+
+    Args:
+        subgoal_data (list of np.array): A list where each element is a (10, 3) numpy array.
+
+    Returns:
+        np.array: An array of maximum variances. Each element corresponds to the maximum of the three column variances
+                  of one (10, 3) array.
+    """
+    max_variances = [np.max(np.var(array, axis=0)) for array in subgoal_data]
+
+    return np.array(max_variances)
+
+
+
+def extract_world_from_subgoals(subgoal_samples_dict):
+    """
+    Extracts the position of the end-effector (eef) of robot0 from a dictionary of subgoal samples
+    and converts it to a NumPy array in the desired shape.
+
+    Args:
+        subgoal_samples_dict (dict): A dictionary containing various subgoal samples. It should
+                                     include the key 'robot0_eef_pos', which is a PyTorch tensor.
+
+    Returns:
+        numpy.ndarray: A NumPy array containing the end-effector positions, reshaped to [..., 3].
+
+    Raises:
+        KeyError: If 'robot0_eef_pos' is not a key in the input dictionary.
+        TypeError: If the value associated with 'robot0_eef_pos' is not a PyTorch tensor.
+    """
+    try:
+        # Ensure 'robot0_eef_pos' is in the dictionary
+        eef_pos_tensor = subgoal_samples_dict['robot0_eef_pos']
+
+        # Check if it's a PyTorch tensor
+        if not isinstance(eef_pos_tensor, torch.Tensor):
+            raise TypeError("The 'robot0_eef_pos' entry must be a PyTorch tensor.")
+
+        # Move tensor to CPU, detach from the computation graph, convert to NumPy array, and reshape
+        return eef_pos_tensor.cpu().detach().numpy().reshape(-1, 3)
+
+    except KeyError:
+        raise KeyError("The key 'robot0_eef_pos' was not found in the input dictionary.")
+
+
+
+def choose_subgoal(sg_proposals, choose_subgoal_index):
+    """
+    Selects a specific subgoal for each key in the provided proposals based on the given index.
+
+    Args:
+        sg_proposals (dict): A dictionary containing subgoal proposals, where each key maps to a list of tensors.
+        choose_subgoal_index (int): The index of the subgoal to be selected for each key.
+
+    Returns:
+        dict: A dictionary with the chosen subgoal for each key.
+
+    Raises:
+        IndexError: If the `choose_subgoal_index` is out of range for any of the subgoal lists.
+    """
+    chosen_subgoal = {}
+
+    for key in sg_proposals:
+        if not (0 <= choose_subgoal_index < len(sg_proposals[key][0])):
+            raise IndexError(f"Index {choose_subgoal_index} is out of range for key '{key}'.")
+
+        chosen_subgoal[key] = sg_proposals[key][0][choose_subgoal_index].unsqueeze(0)
+
+    return chosen_subgoal
 
 
 def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None):
@@ -102,18 +194,51 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     # hack that is necessary for robosuite tasks for deterministic action playback
     obs = env.reset_to(state_dict)
 
+    ### We obtain the camera trnasformation matrix for the env
+    camera_transformation_matrix = env.get_camera_transform_matrix(camera_names[0], 2048, 2048)
+
     results = {}
     video_count = 0  # video frame counter
     total_reward = 0.
     traj = dict(actions=[], rewards=[], dones=[], states=[], initial_state_dict=state_dict)
+    subgoal_stats = dict( eef_world_coordinates=[], eef_pixel_locations=[])
+
     if return_obs:
         # store observations too
         traj.update(dict(obs=[], next_obs=[]))
-    try:
-        for step_i in range(horizon):
 
-            # get action from policy
-            act = policy(ob=obs)
+    try:
+        for step_i in range(0,horizon): #TODO: Check if this is fine
+
+            print(step_i)
+            interval = 50  # Subgoal Update Rate
+
+            # Check if time to update subgoal
+            if step_i % interval == 0:
+
+                # get subgoal samples from planner (VAE)
+                sg_proposals = policy.subgoal_proposals(ob=obs)
+
+                print("The shape of the subgoal proposal is", sg_proposals['robot0_eef_pos'].shape)
+
+                world_points = extract_world_from_subgoals(sg_proposals)
+
+                subgoal_stats['eef_world_coordinates'].append(world_points) # Tracking the world cordinates proposals
+
+                pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 2048, 2048)
+
+                subgoal_stats['eef_pixel_locations'].append(pp_sgs) # Tracking the world cordinates proposals
+
+                choose_subgoal_index = int(input("Choose one of them, using the index"))
+
+                choosen_subgoal = choose_subgoal(sg_proposals, choose_subgoal_index)
+
+                ### Setting the subgoal for the actor
+                policy.set_subgoal(choosen_subgoal)
+
+
+            # print("Subgoal Being used is", choosen_subgoal['robot0_gripper_qpos'])
+            act = policy(ob=obs, goal=None)
 
             # play action
             next_obs, r, done, _ = env.step(act)
@@ -124,12 +249,12 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
             # visualization
             if render:
-                env.render(mode="human", camera_name=camera_names[0])
+                env.render(mode="human", camera_name=camera_names[0], height=2048, width=2048)
             if video_writer is not None:
                 if video_count % video_skip == 0:
                     video_img = []
                     for cam_name in camera_names:
-                        video_img.append(env.render(mode="rgb_array", height=512, width=512, camera_name=cam_name))
+                        video_img.append(env.render(mode="rgb_array", height=2048, width=2048, camera_name=cam_name))
                     video_img = np.concatenate(video_img, axis=1) # concatenate horizontally
                     video_writer.append_data(video_img)
                 video_count += 1
@@ -174,7 +299,12 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
         else:
             traj[k] = np.array(traj[k])
 
-    return stats, traj
+
+    ### We also return the subgoal 3D world co-ordinates and the pixel location corresponding to them
+
+
+
+    return stats, traj, subgoal_stats
 
 
 def run_trained_agent(args):
@@ -230,7 +360,7 @@ def run_trained_agent(args):
 
     rollout_stats = []
     for i in range(rollout_num_episodes):
-        stats, traj = rollout(
+        stats, traj, subgoal_stats = rollout(
             policy=policy, 
             env=env, 
             horizon=rollout_horizon, 
@@ -238,9 +368,18 @@ def run_trained_agent(args):
             video_writer=video_writer, 
             video_skip=args.video_skip, 
             return_obs=(write_dataset and args.dataset_obs),
-            camera_names=args.camera_names,
+            camera_names=args.camera_names, 
         )
         rollout_stats.append(stats)
+        variance_world_coordiantes = calculate_max_column_variance(subgoal_stats['eef_world_coordinates'])
+        variance_pixel_locations = calculate_max_column_variance(subgoal_stats['eef_pixel_locations'])
+
+        plot_array(variance_pixel_locations, title="Variance in pixel locations")
+        plot_array(variance_world_coordiantes, title="Variance in world coordinates")
+
+
+        pdb.set_trace()
+
 
         if write_dataset:
             # store transitions
@@ -341,7 +480,7 @@ if __name__ == "__main__":
         "--camera_names",
         type=str,
         nargs='+',
-        default=["agentview"],
+        default=["frontview"],
         help="(optional) camera name(s) to use for rendering on-screen or to video",
     )
 

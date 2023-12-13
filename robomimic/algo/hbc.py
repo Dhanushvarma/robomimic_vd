@@ -11,6 +11,7 @@ from collections import OrderedDict
 from copy import deepcopy
 
 import torch
+from pprint import pprint
 
 import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.obs_utils as ObsUtils
@@ -311,12 +312,74 @@ class HBC(HierarchicalAlgo):
             action (torch.Tensor): action tensor
         """
         if self._current_subgoal is None or self._subgoal_step_count % self._subgoal_update_interval == 0:
-            # update current subgoal
-            self.current_subgoal = self.planner.get_subgoal_predictions(obs_dict=obs_dict, goal_dict=goal_dict)
 
+            self.current_subgoal = self.planner.get_subgoal_predictions(obs_dict=obs_dict, goal_dict=goal_dict)
+        
         action = self.actor.get_action(obs_dict=obs_dict, goal_dict=self.current_subgoal)
         self._subgoal_step_count += 1
         return action
+    
+    def get_action_rollout(self, obs_dict, goal_dict=None):
+
+        '''
+        if self._current_subgoal is None or self._subgoal_step_count % self._subgoal_update_interval == 0:
+            action = self.actor.get_action(obs_dict=obs_dict, goal_dict=choosen_subgoal)
+            self._subgoal_step_count += 1
+            self._current_subgoal = subgoal
+            print("I am being set")
+        '''
+            
+        action = self.actor.get_action(obs_dict=obs_dict, goal_dict=self.current_subgoal)
+        self._subgoal_step_count += 1
+
+        # print("The subgoal being used is:", self.current_subgoal['robot0_eef_pos'])
+        return action
+
+    '''
+    else:
+        if self._current_subgoal is None or self._subgoal_step_count % self._subgoal_update_interval == 0:
+            print("Rollout time code for get_action ")
+            # update current subgoal
+            subgoal_proposals = self.planner.get_subgoal_predictions(obs_dict=obs_dict, goal_dict=goal_dict, return_all_samples=True)
+
+            # print("The proposals are:", subgoal_proposals['robot0_eef_pos'])
+            # print("subgoal_proposals from the VAE Decoder:", subgoal_proposals['robot0_eef_pos'])
+            # variance_in_subgoals = torch.var(subgoal_proposals['robot0_eef_pos'], dim=1)
+            # print("The varaince in subgoals is:" , variance_in_subgoals)
+
+            # threshold_value = 1e-7
+
+            # if (variance_in_subgoals > threshold_value).any():
+            #     print("Task Uncertainity detected !!!")
+            # choose_subgoal_index = 9
+            # choosen_subgoal = {}
+            # for key in subgoal_proposals:
+            #     choosen_subgoal[key] = subgoal_proposals[key][0][choose_subgoal_index].unsqueeze(0)
+
+            # print("The chooose one is:", choosen_subgoal['robot0_eef_pos'])
+
+
+            # self.current_subgoal = choosen_subgoal
+
+            return subgoal_proposals
+
+        
+        # print("Actual_subgoal being used", self.current_subgoal['robot0_eef_pos'])
+        # input("Press Enter to continue...")
+
+    # action = self.actor.get_action(obs_dict=obs_dict, goal_dict=self.current_subgoal)
+    # self._subgoal_step_count += 1
+    # return action 
+    '''
+
+    def get_sg_props(self, obs_dict, goal_dict=None):
+
+        all_subgoal_proposals = self.planner.get_subgoal_predictions(obs_dict=obs_dict, goal_dict=goal_dict, return_all_samples=True)
+        
+        # print("The subgoals being proposed are:", all_subgoal_proposals['robot0_eef_pos'])
+
+        return all_subgoal_proposals
+
 
     def reset(self):
         """

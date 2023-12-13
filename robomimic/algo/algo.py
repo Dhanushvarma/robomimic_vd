@@ -510,6 +510,89 @@ class RolloutPolicy(object):
         """Pretty print network description"""
         return self.policy.__repr__()
 
+    # def __call__(self, ob, goal=None):
+    def __call__(self, ob, goal=None):
+        """
+        Produce action from raw observation dict (and maybe goal dict) from environment.
+
+        Args:
+            ob (dict): single observation dictionary from environment (no batch dimension, 
+                and np.array values for each key)
+            goal (dict): goal observation
+        """
+        ob = self._prepare_observation(ob)
+        if goal is not None:
+            goal = self._prepare_observation(goal)
+        ac = self.policy.get_action_rollout(ob, goal_dict=None)
+        return TensorUtils.to_numpy(ac[0])
+
+    def subgoal_proposals(self, ob, goal=None):
+
+        ob = self._prepare_observation(ob)
+        if goal is not None:
+            goal = self._prepare_observation(goal) 
+        subgoal_proposals_from_policy = self.policy.get_sg_props(obs_dict=ob, goal_dict=None) #Verify Goal
+        return subgoal_proposals_from_policy
+    
+    def set_subgoal(self, choosen_subgoal):
+
+        # Using the setter function of the current_subgoal 
+        self.policy.current_subgoal = choosen_subgoal
+
+        return None
+
+
+
+
+
+class RolloutPolicy_HBC(object):
+    """
+    Wraps @Algo object to make it easy to run policies in a rollout loop.
+    """
+    def __init__(self, policy, obs_normalization_stats=None):
+        """
+        Args:
+            policy (Algo instance): @Algo object to wrap to prepare for rollouts
+
+            obs_normalization_stats (dict): optionally pass a dictionary for observation
+                normalization. This should map observation keys to dicts
+                with a "mean" and "std" of shape (1, ...) where ... is the default
+                shape for the observation.
+        """
+        self.policy = policy
+        self.obs_normalization_stats = obs_normalization_stats
+
+    def start_episode(self):
+        """
+        Prepare the policy to start a new rollout.
+        """
+        self.policy.set_eval()
+        self.policy.reset()
+
+    def _prepare_observation(self, ob):
+        """
+        Prepare raw observation dict from environment for policy.
+
+        Args:
+            ob (dict): single observation dictionary from environment (no batch dimension, 
+                and np.array values for each key)
+        """
+        ob = TensorUtils.to_tensor(ob)
+        ob = TensorUtils.to_batch(ob)
+        ob = TensorUtils.to_device(ob, self.policy.device)
+        ob = TensorUtils.to_float(ob)
+        if self.obs_normalization_stats is not None:
+            # ensure obs_normalization_stats are torch Tensors on proper device
+            obs_normalization_stats = TensorUtils.to_float(TensorUtils.to_device(TensorUtils.to_tensor(self.obs_normalization_stats), self.policy.device))
+            # limit normalization to obs keys being used, in case environment includes extra keys
+            ob = { k : ob[k] for k in self.policy.global_config.all_obs_keys }
+            ob = ObsUtils.normalize_obs(ob, obs_normalization_stats=obs_normalization_stats)
+        return ob
+
+    def __repr__(self):
+        """Pretty print network description"""
+        return self.policy.__repr__()
+
     def __call__(self, ob, goal=None):
         """
         Produce action from raw observation dict (and maybe goal dict) from environment.
