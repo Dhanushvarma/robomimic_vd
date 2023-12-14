@@ -18,7 +18,7 @@ import robomimic.utils.env_utils as EnvUtils
 import robomimic.utils.torch_utils as TorchUtils
 from robomimic.config import config_factory
 from robomimic.algo import algo_factory
-from robomimic.algo import RolloutPolicy
+from robomimic.algo import RolloutPolicy, RolloutPolicy_HBC
 
 
 def create_hdf5_filter_key(hdf5_path, demo_keys, key_name):
@@ -354,7 +354,7 @@ def config_from_checkpoint(algo_name=None, ckpt_path=None, ckpt_dict=None, verbo
     return config, ckpt_dict
 
 
-def policy_from_checkpoint(device=None, ckpt_path=None, ckpt_dict=None, verbose=False):
+def policy_from_checkpoint(device=None, ckpt_path=None, ckpt_dict=None, verbose=False, HBC=False):
     """
     This function restores a trained policy from a checkpoint file or
     loaded model dictionary.
@@ -410,7 +410,14 @@ def policy_from_checkpoint(device=None, ckpt_path=None, ckpt_dict=None, verbose=
     )
     model.deserialize(ckpt_dict["model"])
     model.set_eval()
-    model = RolloutPolicy(model, obs_normalization_stats=obs_normalization_stats)
+
+    if HBC:
+        model = RolloutPolicy_HBC(model, obs_normalization_stats=obs_normalization_stats)
+
+    else:
+        model = RolloutPolicy(model, obs_normalization_stats=obs_normalization_stats)
+
+
     if verbose:
         print("============= Loaded Policy =============")
         print(model)

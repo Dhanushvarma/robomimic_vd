@@ -68,7 +68,7 @@ import robomimic.utils.torch_utils as TorchUtils
 import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.obs_utils as ObsUtils
 from robomimic.envs.env_base import EnvBase
-from robomimic.algo import RolloutPolicy
+from robomimic.algo import RolloutPolicy, RolloutPolicy_HBC
 
 
 def plot_array(data, title):
@@ -82,8 +82,8 @@ def plot_array(data, title):
     plt.plot(data, linestyle='-', marker='o', color='b')
     plt.grid(True)
     plt.title(title)
-    plt.xlabel('Index')
-    plt.ylabel('Value')
+    plt.xlabel('Subgoal Call Index')
+    plt.ylabel('Variance')
     plt.show()
 
 
@@ -184,7 +184,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
         traj (dict): dictionary that corresponds to the rollout trajectory
     """
     assert isinstance(env, EnvBase)
-    assert isinstance(policy, RolloutPolicy)
+    assert isinstance(policy, RolloutPolicy_HBC)
     assert not (render and (video_writer is not None))
 
     policy.start_episode()
@@ -322,7 +322,7 @@ def run_trained_agent(args):
     device = TorchUtils.get_torch_device(try_to_use_cuda=True)
 
     # restore policy
-    policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_path=ckpt_path, device=device, verbose=True)
+    policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_path=ckpt_path, device=device, verbose=True, HBC=True)
 
     # read rollout settings
     rollout_num_episodes = args.n_rollouts

@@ -462,7 +462,7 @@ class HierarchicalAlgo(Algo):
         raise NotImplementedError
 
 
-class RolloutPolicy(object):
+class RolloutPolicy_HBC(object):
     """
     Wraps @Algo object to make it easy to run policies in a rollout loop.
     """
@@ -545,7 +545,7 @@ class RolloutPolicy(object):
 
 
 
-class RolloutPolicy_HBC(object):
+class RolloutPolicy(object):
     """
     Wraps @Algo object to make it easy to run policies in a rollout loop.
     """
