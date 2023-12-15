@@ -60,6 +60,8 @@ from copy import deepcopy
 import pdb
 import matplotlib.pyplot as plt
 import torch
+import wandb
+from wandb import plot
 
 import robomimic
 import robomimic.utils.camera_utils as CameraUtils
@@ -69,6 +71,73 @@ import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.obs_utils as ObsUtils
 from robomimic.envs.env_base import EnvBase
 from robomimic.algo import RolloutPolicy, RolloutPolicy_HBC
+
+
+def initialize_wandb(project_name, experiment_name, config=None):
+    """
+    Initialize a Weights & Biases (WandB) run.
+
+    Args:
+        project_name (str): The name of the WandB project.
+        experiment_name (str): The name of this particular experiment/run.
+        config (dict, optional): Configuration parameters for the run (like hyperparameters).
+
+    Returns:
+        wandb.run: The WandB run object.
+    """
+    wandb_run = wandb.init(project=project_name, name=experiment_name, config=config)
+    return wandb_run
+
+
+""" def plot_arrays_in_wandb(wandb_run, array_list):
+    for array_index, array in enumerate(array_list):
+        for idx, value in enumerate(array):
+            wandb_run.log({f'Rollout_{array_index}': value, 'index': idx})
+
+def plot_arrays_with_wandb_tables(wandb_run, array_list):
+    # Define the column names for the table
+    columns = ["Index"] + [f"Rollout_{i}" for i in range(len(array_list))]
+
+    # Create a W&B Table
+    table = wandb.Table(columns=columns)
+
+    # Find the maximum length of the arrays
+    max_length = max(len(array) for array in array_list)
+
+    # Fill the table with data
+    for idx in range(max_length):
+        row = [idx] + [array[idx] if idx < len(array) else None for array in array_list]
+        table.add_data(*row)
+
+    # Log the table to W&B
+    wandb_run.log({"array_data": table})
+
+    # Create a line plot (optional, can be done in the W&B UI)
+    wandb_run.log({"line_plot": wandb.plot.line(table, "Index", [f"Rollout_{i}" for i in range(len(array_list))],
+                                               title="Line Plot of Arrays")}) """
+
+
+def gaze_subgoal_index(sg_proposals, gaze_input):
+    """
+    Find the index of the subgoal in sg_proposals that is closest to the gaze_input in Euclidean distance.
+
+    Args:
+        sg_proposals (dict): Dictionary containing subgoal proposals.
+        gaze_input (torch.Tensor): Gaze input tensor of shape [1, 3].
+
+    Returns:
+        int: Index of the closest subgoal.
+    """
+    # Extract the subgoals
+    subgoals = sg_proposals['robot0_eef_pos']  # Shape: [1, N, 3]
+
+    # Calculate Euclidean distances
+    distances = torch.norm(subgoals - gaze_input, dim=2)
+
+    # Find the index of the minimum distance
+    min_distance_idx = torch.argmin(distances)
+
+    return min_distance_idx.item()
 
 
 def plot_array(data, title):
@@ -89,18 +158,19 @@ def plot_array(data, title):
 
 def calculate_max_column_variance(subgoal_data):
     """
-    Calculate the maximum column-wise variance for each (10, 3) array in the provided list of arrays.
+    Calculate the maximum of the column-wise variances for a given (N, 3) numpy array.
 
     Args:
-        subgoal_data (list of np.array): A list where each element is a (10, 3) numpy array.
+        subgoal_data (np.array): An (N, 3) numpy array.
 
     Returns:
-        np.array: An array of maximum variances. Each element corresponds to the maximum of the three column variances
-                  of one (10, 3) array.
+        float: The maximum variance value among the three columns.
     """
-    max_variances = [np.max(np.var(array, axis=0)) for array in subgoal_data]
+    # Calculate variance along each column (axis=0)
+    variances = np.var(subgoal_data, axis=0)
 
-    return np.array(max_variances)
+    # Return the maximum of the three variance values
+    return np.max(variances)
 
 
 
@@ -161,7 +231,7 @@ def choose_subgoal(sg_proposals, choose_subgoal_index):
     return chosen_subgoal
 
 
-def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None):
+def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None, wandb_object=None, rollout_number=None):
     """
     Helper function to carry out rollouts. Supports on-screen rendering, off-screen rendering to a video, 
     and returns the rollout trajectory.
@@ -200,8 +270,9 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     results = {}
     video_count = 0  # video frame counter
     total_reward = 0.
+    # subgoal_poll_count = 0
     traj = dict(actions=[], rewards=[], dones=[], states=[], initial_state_dict=state_dict)
-    subgoal_stats = dict( eef_world_coordinates=[], eef_pixel_locations=[])
+    subgoal_stats = dict( var_eef_world_coordinates=[], var_eef_pixel_locations=[]) # We are directly storing the variances instead of the actual input values
 
     if return_obs:
         # store observations too
@@ -220,21 +291,23 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
                 sg_proposals = policy.subgoal_proposals(ob=obs)
 
                 print("The shape of the subgoal proposal is", sg_proposals['robot0_eef_pos'].shape)
-
                 world_points = extract_world_from_subgoals(sg_proposals)
-
-                subgoal_stats['eef_world_coordinates'].append(world_points) # Tracking the world cordinates proposals
-
                 pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 2048, 2048)
 
-                subgoal_stats['eef_pixel_locations'].append(pp_sgs) # Tracking the world cordinates proposals
+                var_world_sg, var_pixel_sg = calculate_max_column_variance(world_points), calculate_max_column_variance(pp_sgs) #Computing Column wise variance and taking the max
+                #TODO: Do not only track the maximum, track all the (x,y,z) - World points, (x,y) - Gaze Points
 
-                choose_subgoal_index = int(input("Choose one of them, using the index"))
+                subgoal_stats['var_eef_world_coordinates'].append(var_world_sg) # Adding to dict
+                subgoal_stats['var_eef_pixel_locations'].append(var_pixel_sg)   # Adding to dict
+                gaze_input = torch.rand(1, 2).cuda() # Here we need to provide the actual gaze input
 
-                choosen_subgoal = choose_subgoal(sg_proposals, choose_subgoal_index)
+                # choose_subgoal_index = int(input("Choose one of them, using the index")) # Manually Inputting the index
+                subgoal_index_from_gaze = gaze_subgoal_index(sg_proposals, gaze_input) # Choose closest subgoal to gaze input in Eucledian Distance #TODO: this function should take gaze(x,y) and pp_sgs
+                choosen_subgoal = choose_subgoal(sg_proposals, subgoal_index_from_gaze) # Currently we are giving index for choosing from the samples
 
-                ### Setting the subgoal for the actor
-                policy.set_subgoal(choosen_subgoal)
+                policy.set_subgoal(choosen_subgoal) ### Setting the subgoal for the actor
+                # wandb_object.log({'Index': subgoal_poll_count, 'Variance world points':var_world_sg}) #TODO: Fix the WandB logging stuff, just save matplotlib plots
+                # subgoal_poll_count += 1
 
 
             # print("Subgoal Being used is", choosen_subgoal['robot0_gripper_qpos'])
@@ -358,7 +431,11 @@ def run_trained_agent(args):
         data_grp = data_writer.create_group("data")
         total_samples = 0
 
+    # Setup wandb Script
+    wandb_run = initialize_wandb("my_rollout_project", "multiple_rollout_experiment")
+
     rollout_stats = []
+    subgoal_stats_cumulative = []
     for i in range(rollout_num_episodes):
         stats, traj, subgoal_stats = rollout(
             policy=policy, 
@@ -368,17 +445,21 @@ def run_trained_agent(args):
             video_writer=video_writer, 
             video_skip=args.video_skip, 
             return_obs=(write_dataset and args.dataset_obs),
-            camera_names=args.camera_names, 
+            camera_names=args.camera_names, wandb_object=wandb_run, rollout_number=i
         )
+
+        wandb_run.log({'Rollout': i, 'Return': stats['Return']})
+        wandb_run.log({'Rollout': i, 'Horizon': stats['Horizon']})
+
         rollout_stats.append(stats)
-        variance_world_coordiantes = calculate_max_column_variance(subgoal_stats['eef_world_coordinates'])
-        variance_pixel_locations = calculate_max_column_variance(subgoal_stats['eef_pixel_locations'])
 
-        plot_array(variance_pixel_locations, title="Variance in pixel locations")
-        plot_array(variance_world_coordiantes, title="Variance in world coordinates")
+        # Calculate Variances TODO: fix this wandB plotting stuff
+        # variance_world_coordiantes = calculate_max_column_variance(subgoal_stats['eef_world_coordinates'])
+        # variance_pixel_locations = calculate_max_column_variance(subgoal_stats['eef_pixel_locations'])
+        subgoal_stats_cumulative.append(subgoal_stats['var_eef_pixel_locations'])
 
-
-        pdb.set_trace()
+        # plot_array(variance_pixel_locations, title="Variance in pixel locations")
+        # plot_array(variance_world_coordiantes, title="Variance in world coordinates")
 
 
         if write_dataset:
@@ -404,6 +485,10 @@ def run_trained_agent(args):
     avg_rollout_stats["Num_Success"] = np.sum(rollout_stats["Success_Rate"])
     print("Average Rollout Stats")
     print(json.dumps(avg_rollout_stats, indent=4))
+
+
+    wandb_run.log({"Success Rate": avg_rollout_stats["Num_Success"]}) #Tracking Success Rate = ( # of Success / # of Rollouts )
+    wandb.finish()
 
     if write_video:
         video_writer.close()
