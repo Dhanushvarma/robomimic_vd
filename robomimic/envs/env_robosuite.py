@@ -187,7 +187,7 @@ class EnvRobosuite(EB.EnvBase):
             cam_id = self.env.sim.model.camera_name2id(camera_name)
             self.env.viewer.set_camera(cam_id)
             import pdb
-            pdb.set_trace()
+            # pdb.set_trace()
             return self.env.render()
         elif mode == "rgb_array":
             im = self.env.sim.render(height=height, width=width, camera_name=camera_name)

@@ -62,8 +62,11 @@ import matplotlib.pyplot as plt
 import torch
 import wandb
 from wandb import plot
+import cv2
+from gaze_socket_client import SimpleClient
 
 import robomimic
+import robomimic.utils.gaze_data_utils as GazeUtils
 import robomimic.utils.camera_utils as CameraUtils
 import robomimic.utils.file_utils as FileUtils
 import robomimic.utils.torch_utils as TorchUtils
@@ -117,7 +120,7 @@ def plot_arrays_with_wandb_tables(wandb_run, array_list):
                                                title="Line Plot of Arrays")}) """
 
 
-def gaze_subgoal_index(sg_proposals, gaze_input):
+def eef_subgoal_index(sg_proposals, gaze_input):
     """
     Find the index of the subgoal in sg_proposals that is closest to the gaze_input in Euclidean distance.
 
@@ -138,6 +141,27 @@ def gaze_subgoal_index(sg_proposals, gaze_input):
     min_distance_idx = torch.argmin(distances)
 
     return min_distance_idx.item()
+
+
+def gaze_subgoal_index(pp_sgs, gaze_input):
+    """
+    Find the index of the point in pp_sgs that is closest to the single gaze_input point in Euclidean distance.
+
+    Args:
+        pp_sgs (np.ndarray): Point positions, an array of shape [N, 2].
+        gaze_input (np.ndarray): Gaze input array of shape [1, 2].
+
+    Returns:
+        int: Index of the closest point in pp_sgs.
+    """
+    # Calculate Euclidean distances between gaze_input and each point in pp_sgs
+    # Since gaze_input is [1, 2], it will broadcast over [N, 2]
+    distances = np.linalg.norm(pp_sgs - gaze_input, axis=1)
+
+    # Find the index of the minimum distance
+    min_distance_idx = np.argmin(distances)
+
+    return min_distance_idx
 
 
 def plot_array(data, title):
@@ -231,7 +255,7 @@ def choose_subgoal(sg_proposals, choose_subgoal_index):
     return chosen_subgoal
 
 
-def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None, wandb_object=None, rollout_number=None):
+def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None, wandb_object=None, rollout_number=None, socket_obj=None):
     """
     Helper function to carry out rollouts. Supports on-screen rendering, off-screen rendering to a video, 
     and returns the rollout trajectory.
@@ -255,7 +279,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     """
     assert isinstance(env, EnvBase)
     assert isinstance(policy, RolloutPolicy_HBC)
-    assert not (render and (video_writer is not None))
+    # assert not (render and (video_writer is not None))
 
     policy.start_episode()
     obs = env.reset()
@@ -265,7 +289,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     obs = env.reset_to(state_dict)
 
     ### We obtain the camera trnasformation matrix for the env
-    camera_transformation_matrix = env.get_camera_transform_matrix(camera_names[0], 2048, 2048)
+    camera_transformation_matrix = env.get_camera_transform_matrix(camera_names[0], 1440, 2560)  #TODO: check numbers
 
     results = {}
     video_count = 0  # video frame counter
@@ -278,11 +302,16 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
         # store observations too
         traj.update(dict(obs=[], next_obs=[]))
 
+    #Gaze Related Stuff
+    gaze_util_obj = GazeUtils.gaze_data_util(2560, 1440)  # Input the actual screen size
+
     try:
         for step_i in range(0,horizon): #TODO: Check if this is fine
 
             print(step_i)
-            interval = 50  # Subgoal Update Rate
+            gaze_data_dict = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message())
+            print("The actual gaze is", gaze_data_dict)
+            interval = 50   #TODO: Currently manually inputting the subgoal update interval, improve this
 
             # Check if time to update subgoal
             if step_i % interval == 0:
@@ -292,18 +321,30 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
                 print("The shape of the subgoal proposal is", sg_proposals['robot0_eef_pos'].shape)
                 world_points = extract_world_from_subgoals(sg_proposals)
-                pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 2048, 2048)
+                pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 1440, 2560)  #TODO: check numbers
 
                 var_world_sg, var_pixel_sg = calculate_max_column_variance(world_points), calculate_max_column_variance(pp_sgs) #Computing Column wise variance and taking the max
                 #TODO: Do not only track the maximum, track all the (x,y,z) - World points, (x,y) - Gaze Points
 
                 subgoal_stats['var_eef_world_coordinates'].append(var_world_sg) # Adding to dict
                 subgoal_stats['var_eef_pixel_locations'].append(var_pixel_sg)   # Adding to dict
-                gaze_input = torch.rand(1, 2).cuda() # Here we need to provide the actual gaze input
 
-                # choose_subgoal_index = int(input("Choose one of them, using the index")) # Manually Inputting the index
-                subgoal_index_from_gaze = gaze_subgoal_index(sg_proposals, gaze_input) # Choose closest subgoal to gaze input in Eucledian Distance #TODO: this function should take gaze(x,y) and pp_sgs
+                eef_input = torch.rand(1, 3).cuda()  # Dummy eef position
+                gaze_input = np.random.rand(1,2) # Here we need to provide the actual gaze input
+
+                ###
+                # gaze_data_dict = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message())
+                # print("The actual gaze is", gaze_data_dict)
+                ###
+                
+                
+
+                subgoal_index_from_gaze = eef_subgoal_index(sg_proposals, eef_input) # Closest point in eef coordinates, 3D
+                subgoal_index_from_gaze = gaze_subgoal_index(pp_sgs=pp_sgs, gaze_input=gaze_input) # Closest point in pixel coordinates, 2D
+               
                 choosen_subgoal = choose_subgoal(sg_proposals, subgoal_index_from_gaze) # Currently we are giving index for choosing from the samples
+
+                
 
                 policy.set_subgoal(choosen_subgoal) ### Setting the subgoal for the actor
                 # wandb_object.log({'Index': subgoal_poll_count, 'Variance world points':var_world_sg}) #TODO: Fix the WandB logging stuff, just save matplotlib plots
@@ -322,12 +363,17 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
             # visualization
             if render:
-                env.render(mode="human", camera_name=camera_names[0], height=2048, width=2048)
+                env.render(mode="human", camera_name=camera_names[0], width=2560, height=1440)  #TODO: need to put the correct numbers, being overridden by OpenCv ?
+                
             if video_writer is not None:
                 if video_count % video_skip == 0:
                     video_img = []
+                    env.render(mode="human", camera_name=camera_names[0], width=2560, height=1440)
                     for cam_name in camera_names:
-                        video_img.append(env.render(mode="rgb_array", height=2048, width=2048, camera_name=cam_name))
+                        current_frame = env.render(mode="rgb_array", height=1440, width=2560, camera_name=cam_name)
+                        # pdb.set_trace()
+                        edited_frame = cv2.drawMarker(np.float32(current_frame), (int(gaze_data_dict['pixel_x']), int(gaze_data_dict['pixel_y'])), color=(0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=100, thickness=2)
+                        video_img.append(edited_frame)
                     video_img = np.concatenate(video_img, axis=1) # concatenate horizontally
                     video_writer.append_data(video_img)
                 video_count += 1
@@ -383,7 +429,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 def run_trained_agent(args):
     # some arg checking
     write_video = (args.video_path is not None)
-    assert not (args.render and write_video) # either on-screen or video but not both
+    # assert not (args.render and write_video) # either on-screen or video but not both
     if args.render:
         # on-screen rendering can only support one camera
         assert len(args.camera_names) == 1
@@ -432,7 +478,9 @@ def run_trained_agent(args):
         total_samples = 0
 
     # Setup wandb Script
-    wandb_run = initialize_wandb("my_rollout_project", "multiple_rollout_experiment")
+    # wandb_run = initialize_wandb("my_rollout_project", "multiple_rollout_experiment")
+    gaze_client = SimpleClient('192.168.1.93', 5478, 102)  # IPv4(windows), Port Number, len(meesage)
+    gaze_client.connect_to_server()
 
     rollout_stats = []
     subgoal_stats_cumulative = []
@@ -445,11 +493,11 @@ def run_trained_agent(args):
             video_writer=video_writer, 
             video_skip=args.video_skip, 
             return_obs=(write_dataset and args.dataset_obs),
-            camera_names=args.camera_names, wandb_object=wandb_run, rollout_number=i
-        )
+            camera_names=args.camera_names, wandb_object=None, rollout_number=i, socket_obj= gaze_client
+        ) # Passing the gaze_socket object to our rollout
 
-        wandb_run.log({'Rollout': i, 'Return': stats['Return']})
-        wandb_run.log({'Rollout': i, 'Horizon': stats['Horizon']})
+        # wandb_run.log({'Rollout': i, 'Return': stats['Return']})
+        # wandb_run.log({'Rollout': i, 'Horizon': stats['Horizon']})
 
         rollout_stats.append(stats)
 
@@ -480,6 +528,8 @@ def run_trained_agent(args):
             ep_data_grp.attrs["num_samples"] = traj["actions"].shape[0] # number of transitions in this episode
             total_samples += traj["actions"].shape[0]
 
+    gaze_client.disconnect()  # Disconnecting from the Windows Server
+
     rollout_stats = TensorUtils.list_of_flat_dict_to_dict_of_list(rollout_stats)
     avg_rollout_stats = { k : np.mean(rollout_stats[k]) for k in rollout_stats }
     avg_rollout_stats["Num_Success"] = np.sum(rollout_stats["Success_Rate"])
@@ -487,8 +537,8 @@ def run_trained_agent(args):
     print(json.dumps(avg_rollout_stats, indent=4))
 
 
-    wandb_run.log({"Success Rate": avg_rollout_stats["Num_Success"]}) #Tracking Success Rate = ( # of Success / # of Rollouts )
-    wandb.finish()
+    # wandb_run.log({"Success Rate": avg_rollout_stats["Num_Success"]}) #Tracking Success Rate = ( # of Success / # of Rollouts )
+    # wandb.finish()
 
     if write_video:
         video_writer.close()
