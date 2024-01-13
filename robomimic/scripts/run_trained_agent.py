@@ -57,205 +57,19 @@ import h5py
 import imageio
 import numpy as np
 from copy import deepcopy
-import pdb
-import matplotlib.pyplot as plt
+
 import torch
-import wandb
-from wandb import plot
-import cv2
-from gaze_socket_client import SimpleClient
 
 import robomimic
-import robomimic.utils.gaze_data_utils as GazeUtils
-import robomimic.utils.camera_utils as CameraUtils
 import robomimic.utils.file_utils as FileUtils
 import robomimic.utils.torch_utils as TorchUtils
 import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.obs_utils as ObsUtils
 from robomimic.envs.env_base import EnvBase
-from robomimic.algo import RolloutPolicy, RolloutPolicy_HBC
+from robomimic.algo import RolloutPolicy
 
 
-def initialize_wandb(project_name, experiment_name, config=None):
-    """
-    Initialize a Weights & Biases (WandB) run.
-
-    Args:
-        project_name (str): The name of the WandB project.
-        experiment_name (str): The name of this particular experiment/run.
-        config (dict, optional): Configuration parameters for the run (like hyperparameters).
-
-    Returns:
-        wandb.run: The WandB run object.
-    """
-    wandb_run = wandb.init(project=project_name, name=experiment_name, config=config)
-    return wandb_run
-
-
-""" def plot_arrays_in_wandb(wandb_run, array_list):
-    for array_index, array in enumerate(array_list):
-        for idx, value in enumerate(array):
-            wandb_run.log({f'Rollout_{array_index}': value, 'index': idx})
-
-def plot_arrays_with_wandb_tables(wandb_run, array_list):
-    # Define the column names for the table
-    columns = ["Index"] + [f"Rollout_{i}" for i in range(len(array_list))]
-
-    # Create a W&B Table
-    table = wandb.Table(columns=columns)
-
-    # Find the maximum length of the arrays
-    max_length = max(len(array) for array in array_list)
-
-    # Fill the table with data
-    for idx in range(max_length):
-        row = [idx] + [array[idx] if idx < len(array) else None for array in array_list]
-        table.add_data(*row)
-
-    # Log the table to W&B
-    wandb_run.log({"array_data": table})
-
-    # Create a line plot (optional, can be done in the W&B UI)
-    wandb_run.log({"line_plot": wandb.plot.line(table, "Index", [f"Rollout_{i}" for i in range(len(array_list))],
-                                               title="Line Plot of Arrays")}) """
-
-
-def eef_subgoal_index(sg_proposals, gaze_input):
-    """
-    Find the index of the subgoal in sg_proposals that is closest to the gaze_input in Euclidean distance.
-
-    Args:
-        sg_proposals (dict): Dictionary containing subgoal proposals.
-        gaze_input (torch.Tensor): Gaze input tensor of shape [1, 3].
-
-    Returns:
-        int: Index of the closest subgoal.
-    """
-    # Extract the subgoals
-    subgoals = sg_proposals['robot0_eef_pos']  # Shape: [1, N, 3]
-
-    # Calculate Euclidean distances
-    distances = torch.norm(subgoals - gaze_input, dim=2)
-
-    # Find the index of the minimum distance
-    min_distance_idx = torch.argmin(distances)
-
-    return min_distance_idx.item()
-
-
-def gaze_subgoal_index(pp_sgs, gaze_input):
-    """
-    Find the index of the point in pp_sgs that is closest to the single gaze_input point in Euclidean distance.
-
-    Args:
-        pp_sgs (np.ndarray): Point positions, an array of shape [N, 2].
-        gaze_input (np.ndarray): Gaze input array of shape [1, 2].
-
-    Returns:
-        int: Index of the closest point in pp_sgs.
-    """
-    # Calculate Euclidean distances between gaze_input and each point in pp_sgs
-    # Since gaze_input is [1, 2], it will broadcast over [N, 2]
-    distances = np.linalg.norm(pp_sgs - gaze_input, axis=1)
-
-    # Find the index of the minimum distance
-    min_distance_idx = np.argmin(distances)
-
-    return min_distance_idx
-
-
-def plot_array(data, title):
-    """
-    Plot a given numpy array of size (n,) as a line plot.
-
-    Args:
-        data (np.array): A numpy array of size (n,).
-    """
-    plt.figure(figsize=(10, 6))
-    plt.plot(data, linestyle='-', marker='o', color='b')
-    plt.grid(True)
-    plt.title(title)
-    plt.xlabel('Subgoal Call Index')
-    plt.ylabel('Variance')
-    plt.show()
-
-
-def calculate_max_column_variance(subgoal_data):
-    """
-    Calculate the maximum of the column-wise variances for a given (N, 3) numpy array.
-
-    Args:
-        subgoal_data (np.array): An (N, 3) numpy array.
-
-    Returns:
-        float: The maximum variance value among the three columns.
-    """
-    # Calculate variance along each column (axis=0)
-    variances = np.var(subgoal_data, axis=0)
-
-    # Return the maximum of the three variance values
-    return np.max(variances)
-
-
-
-def extract_world_from_subgoals(subgoal_samples_dict):
-    """
-    Extracts the position of the end-effector (eef) of robot0 from a dictionary of subgoal samples
-    and converts it to a NumPy array in the desired shape.
-
-    Args:
-        subgoal_samples_dict (dict): A dictionary containing various subgoal samples. It should
-                                     include the key 'robot0_eef_pos', which is a PyTorch tensor.
-
-    Returns:
-        numpy.ndarray: A NumPy array containing the end-effector positions, reshaped to [..., 3].
-
-    Raises:
-        KeyError: If 'robot0_eef_pos' is not a key in the input dictionary.
-        TypeError: If the value associated with 'robot0_eef_pos' is not a PyTorch tensor.
-    """
-    try:
-        # Ensure 'robot0_eef_pos' is in the dictionary
-        eef_pos_tensor = subgoal_samples_dict['robot0_eef_pos']
-
-        # Check if it's a PyTorch tensor
-        if not isinstance(eef_pos_tensor, torch.Tensor):
-            raise TypeError("The 'robot0_eef_pos' entry must be a PyTorch tensor.")
-
-        # Move tensor to CPU, detach from the computation graph, convert to NumPy array, and reshape
-        return eef_pos_tensor.cpu().detach().numpy().reshape(-1, 3)
-
-    except KeyError:
-        raise KeyError("The key 'robot0_eef_pos' was not found in the input dictionary.")
-
-
-
-def choose_subgoal(sg_proposals, choose_subgoal_index):
-    """
-    Selects a specific subgoal for each key in the provided proposals based on the given index.
-
-    Args:
-        sg_proposals (dict): A dictionary containing subgoal proposals, where each key maps to a list of tensors.
-        choose_subgoal_index (int): The index of the subgoal to be selected for each key.
-
-    Returns:
-        dict: A dictionary with the chosen subgoal for each key.
-
-    Raises:
-        IndexError: If the `choose_subgoal_index` is out of range for any of the subgoal lists.
-    """
-    chosen_subgoal = {}
-
-    for key in sg_proposals:
-        if not (0 <= choose_subgoal_index < len(sg_proposals[key][0])):
-            raise IndexError(f"Index {choose_subgoal_index} is out of range for key '{key}'.")
-
-        chosen_subgoal[key] = sg_proposals[key][0][choose_subgoal_index].unsqueeze(0)
-
-    return chosen_subgoal
-
-
-def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None, wandb_object=None, rollout_number=None, socket_obj=None):
+def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None):
     """
     Helper function to carry out rollouts. Supports on-screen rendering, off-screen rendering to a video, 
     and returns the rollout trajectory.
@@ -278,8 +92,8 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
         traj (dict): dictionary that corresponds to the rollout trajectory
     """
     assert isinstance(env, EnvBase)
-    assert isinstance(policy, RolloutPolicy_HBC)
-    # assert not (render and (video_writer is not None))
+    assert isinstance(policy, RolloutPolicy)
+    assert not (render and (video_writer is not None))
 
     policy.start_episode()
     obs = env.reset()
@@ -288,71 +102,18 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     # hack that is necessary for robosuite tasks for deterministic action playback
     obs = env.reset_to(state_dict)
 
-    ### We obtain the camera trnasformation matrix for the env
-    camera_transformation_matrix = env.get_camera_transform_matrix(camera_names[0], 1440, 2560)  #TODO: check numbers
-
     results = {}
     video_count = 0  # video frame counter
     total_reward = 0.
-    # subgoal_poll_count = 0
     traj = dict(actions=[], rewards=[], dones=[], states=[], initial_state_dict=state_dict)
-    subgoal_stats = dict( var_eef_world_coordinates=[], var_eef_pixel_locations=[]) # We are directly storing the variances instead of the actual input values
-
     if return_obs:
         # store observations too
         traj.update(dict(obs=[], next_obs=[]))
-
-    #Gaze Related Stuff
-    gaze_util_obj = GazeUtils.gaze_data_util(2560, 1440)  # Input the actual screen size
-
     try:
-        for step_i in range(0,horizon): #TODO: Check if this is fine
+        for step_i in range(horizon):
 
-            print(step_i)
-            gaze_data_dict = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message())
-            print("The actual gaze is", gaze_data_dict)
-            interval = 50   #TODO: Currently manually inputting the subgoal update interval, improve this
-
-            # Check if time to update subgoal
-            if step_i % interval == 0:
-
-                # get subgoal samples from planner (VAE)
-                sg_proposals = policy.subgoal_proposals(ob=obs)
-
-                print("The shape of the subgoal proposal is", sg_proposals['robot0_eef_pos'].shape)
-                world_points = extract_world_from_subgoals(sg_proposals)
-                pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 1440, 2560)  #TODO: check numbers
-
-                var_world_sg, var_pixel_sg = calculate_max_column_variance(world_points), calculate_max_column_variance(pp_sgs) #Computing Column wise variance and taking the max
-                #TODO: Do not only track the maximum, track all the (x,y,z) - World points, (x,y) - Gaze Points
-
-                subgoal_stats['var_eef_world_coordinates'].append(var_world_sg) # Adding to dict
-                subgoal_stats['var_eef_pixel_locations'].append(var_pixel_sg)   # Adding to dict
-
-                eef_input = torch.rand(1, 3).cuda()  # Dummy eef position
-                gaze_input = np.random.rand(1,2) # Here we need to provide the actual gaze input
-
-                ###
-                # gaze_data_dict = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message())
-                # print("The actual gaze is", gaze_data_dict)
-                ###
-                
-                
-
-                subgoal_index_from_gaze = eef_subgoal_index(sg_proposals, eef_input) # Closest point in eef coordinates, 3D
-                subgoal_index_from_gaze = gaze_subgoal_index(pp_sgs=pp_sgs, gaze_input=gaze_input) # Closest point in pixel coordinates, 2D
-               
-                choosen_subgoal = choose_subgoal(sg_proposals, subgoal_index_from_gaze) # Currently we are giving index for choosing from the samples
-
-                
-
-                policy.set_subgoal(choosen_subgoal) ### Setting the subgoal for the actor
-                # wandb_object.log({'Index': subgoal_poll_count, 'Variance world points':var_world_sg}) #TODO: Fix the WandB logging stuff, just save matplotlib plots
-                # subgoal_poll_count += 1
-
-
-            # print("Subgoal Being used is", choosen_subgoal['robot0_gripper_qpos'])
-            act = policy(ob=obs, goal=None)
+            # get action from policy
+            act = policy(ob=obs)
 
             # play action
             next_obs, r, done, _ = env.step(act)
@@ -363,17 +124,12 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
             # visualization
             if render:
-                env.render(mode="human", camera_name=camera_names[0], width=2560, height=1440)  #TODO: need to put the correct numbers, being overridden by OpenCv ?
-                
+                env.render(mode="human", camera_name=camera_names[0])
             if video_writer is not None:
                 if video_count % video_skip == 0:
                     video_img = []
-                    env.render(mode="human", camera_name=camera_names[0], width=2560, height=1440)
                     for cam_name in camera_names:
-                        current_frame = env.render(mode="rgb_array", height=1440, width=2560, camera_name=cam_name)
-                        # pdb.set_trace()
-                        edited_frame = cv2.drawMarker(np.float32(current_frame), (int(gaze_data_dict['pixel_x']), int(gaze_data_dict['pixel_y'])), color=(0, 0, 255), markerType=cv2.MARKER_CROSS, markerSize=100, thickness=2)
-                        video_img.append(edited_frame)
+                        video_img.append(env.render(mode="rgb_array", height=512, width=512, camera_name=cam_name))
                     video_img = np.concatenate(video_img, axis=1) # concatenate horizontally
                     video_writer.append_data(video_img)
                 video_count += 1
@@ -418,18 +174,13 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
         else:
             traj[k] = np.array(traj[k])
 
-
-    ### We also return the subgoal 3D world co-ordinates and the pixel location corresponding to them
-
-
-
-    return stats, traj, subgoal_stats
+    return stats, traj
 
 
 def run_trained_agent(args):
     # some arg checking
     write_video = (args.video_path is not None)
-    # assert not (args.render and write_video) # either on-screen or video but not both
+    assert not (args.render and write_video) # either on-screen or video but not both
     if args.render:
         # on-screen rendering can only support one camera
         assert len(args.camera_names) == 1
@@ -441,7 +192,7 @@ def run_trained_agent(args):
     device = TorchUtils.get_torch_device(try_to_use_cuda=True)
 
     # restore policy
-    policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_path=ckpt_path, device=device, verbose=True, HBC=True)
+    policy, ckpt_dict = FileUtils.policy_from_checkpoint(ckpt_path=ckpt_path, device=device, verbose=True)
 
     # read rollout settings
     rollout_num_episodes = args.n_rollouts
@@ -477,15 +228,9 @@ def run_trained_agent(args):
         data_grp = data_writer.create_group("data")
         total_samples = 0
 
-    # Setup wandb Script
-    # wandb_run = initialize_wandb("my_rollout_project", "multiple_rollout_experiment")
-    gaze_client = SimpleClient('192.168.1.93', 5478, 102)  # IPv4(windows), Port Number, len(meesage)
-    gaze_client.connect_to_server()
-
     rollout_stats = []
-    subgoal_stats_cumulative = []
     for i in range(rollout_num_episodes):
-        stats, traj, subgoal_stats = rollout(
+        stats, traj = rollout(
             policy=policy, 
             env=env, 
             horizon=rollout_horizon, 
@@ -493,22 +238,9 @@ def run_trained_agent(args):
             video_writer=video_writer, 
             video_skip=args.video_skip, 
             return_obs=(write_dataset and args.dataset_obs),
-            camera_names=args.camera_names, wandb_object=None, rollout_number=i, socket_obj= gaze_client
-        ) # Passing the gaze_socket object to our rollout
-
-        # wandb_run.log({'Rollout': i, 'Return': stats['Return']})
-        # wandb_run.log({'Rollout': i, 'Horizon': stats['Horizon']})
-
+            camera_names=args.camera_names,
+        )
         rollout_stats.append(stats)
-
-        # Calculate Variances TODO: fix this wandB plotting stuff
-        # variance_world_coordiantes = calculate_max_column_variance(subgoal_stats['eef_world_coordinates'])
-        # variance_pixel_locations = calculate_max_column_variance(subgoal_stats['eef_pixel_locations'])
-        subgoal_stats_cumulative.append(subgoal_stats['var_eef_pixel_locations'])
-
-        # plot_array(variance_pixel_locations, title="Variance in pixel locations")
-        # plot_array(variance_world_coordiantes, title="Variance in world coordinates")
-
 
         if write_dataset:
             # store transitions
@@ -528,17 +260,11 @@ def run_trained_agent(args):
             ep_data_grp.attrs["num_samples"] = traj["actions"].shape[0] # number of transitions in this episode
             total_samples += traj["actions"].shape[0]
 
-    gaze_client.disconnect()  # Disconnecting from the Windows Server
-
     rollout_stats = TensorUtils.list_of_flat_dict_to_dict_of_list(rollout_stats)
     avg_rollout_stats = { k : np.mean(rollout_stats[k]) for k in rollout_stats }
     avg_rollout_stats["Num_Success"] = np.sum(rollout_stats["Success_Rate"])
     print("Average Rollout Stats")
     print(json.dumps(avg_rollout_stats, indent=4))
-
-
-    # wandb_run.log({"Success Rate": avg_rollout_stats["Num_Success"]}) #Tracking Success Rate = ( # of Success / # of Rollouts )
-    # wandb.finish()
 
     if write_video:
         video_writer.close()
@@ -615,7 +341,7 @@ if __name__ == "__main__":
         "--camera_names",
         type=str,
         nargs='+',
-        default=["frontview"],
+        default=["agentview"],
         help="(optional) camera name(s) to use for rendering on-screen or to video",
     )
 
@@ -645,4 +371,3 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
     run_trained_agent(args)
-

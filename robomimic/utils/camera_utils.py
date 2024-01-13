@@ -15,7 +15,7 @@ import numpy as np
 # import robosuite
 # import robosuite.utils.transform_utils as T
 # from robosuite.wrappers import DomainRandomizationWrapper, VisualizationWrapper
-
+#TODO: dhanush, imported these for gaze stuff
 
 def get_camera_intrinsic_matrix(sim, camera_name, camera_height, camera_width):
     """

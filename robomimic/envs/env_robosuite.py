@@ -186,8 +186,6 @@ class EnvRobosuite(EB.EnvBase):
         if mode == "human":
             cam_id = self.env.sim.model.camera_name2id(camera_name)
             self.env.viewer.set_camera(cam_id)
-            import pdb
-            # pdb.set_trace()
             return self.env.render()
         elif mode == "rgb_array":
             im = self.env.sim.render(height=height, width=width, camera_name=camera_name)
@@ -195,6 +193,16 @@ class EnvRobosuite(EB.EnvBase):
                 # render() returns a tuple when self.use_depth_obs=True
                 return im[0][::-1]
             return im[::-1]
+        elif mode == "gaze":
+            # TODO: dhanush, fix later
+            cam_id = self.env.sim.model.camera_name2id(camera_name)
+            self.env.viewer.set_camera(cam_id)
+            im = self.env.render(gaze=True)
+            # RGB ARRAY PART #
+            # im = self.env.sim.render(height=height, width=width, camera_name=camera_name)
+            # import pdb; pdb.set_trace()
+            return im[::-1]
+
         else:
             raise NotImplementedError("mode={} is not implemented".format(mode))
 
@@ -321,7 +329,7 @@ class EnvRobosuite(EB.EnvBase):
         return K_exp @ T.pose_inv(R)
     
 
-    def project_points_from_world_to_camera(self, points, world_to_camera_transform, camera_height, camera_width):
+    def project_points_from_world_to_camera(self, points, world_to_camera_transform, camera_height, camera_width): #TODO: dhanush, verify
         """
         Helper function to project a batch of points in the world frame
         into camera pixels using the world to camera transformation.

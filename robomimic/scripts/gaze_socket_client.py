@@ -1,5 +1,6 @@
 import threading
 import socket
+#TODO: check for further improvements
 
 class SimpleClient:
     def __init__(self, host, port, message_length):
