@@ -49,17 +49,34 @@ def make_generator(config_file, script_file):
         base_config_file=config_file, script_file=script_file
     )
 
-    ## GROUP 0 
+    ## GROUP 0  - fixed stuff
+
+    generator.add_param(
+        key="experiment.save.every_n_epochs",
+        name="", 
+        group=0, 
+        values=[250],
+    )
+
+
+    generator.add_param(
+        key="experiment.rollout.rate",
+        name="", 
+        group=0, 
+        values=[250],
+    )
 
     ## END of GROUP 0 
 
     ##GROUP 1 of hyper paramas
 
+
+
     generator.add_param(
         key = "algo.subgoal_update_interval",
         name = "subgoal_update_interval",
         group=1,
-        values=[10, 25, 50, 100]
+        values=[10, 50, 100]
     )
 
 
@@ -67,14 +84,14 @@ def make_generator(config_file, script_file):
         key = "algo.planner.subgoal_horizon",
         name="subgoal_horizon", 
         group=1, 
-        values=[10, 25, 50, 100] 
+        values=[10, 50, 100] 
     )
 
     generator.add_param(
         key = "algo.actor.rnn.horizon",
         name="rnn_horizon", 
         group=1, 
-        values=[10, 25, 50, 100]
+        values=[10, 50, 100]
     )
 
     ### END of GROUP 1
