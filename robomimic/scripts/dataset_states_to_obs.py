@@ -60,6 +60,7 @@ import robomimic.utils.file_utils as FileUtils
 import robomimic.utils.env_utils as EnvUtils
 from robomimic.envs.env_base import EnvBase
 
+#TODO: dhanush, when converting also embed the gaze information
 
 def extract_trajectory(
     env, 

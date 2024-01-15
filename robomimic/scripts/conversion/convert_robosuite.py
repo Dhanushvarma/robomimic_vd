@@ -15,7 +15,7 @@ Example usage:
 
     python convert_robosuite.py --dataset /path/to/your/demo.hdf5
 """
-
+#TODO: dhanush, when converting also embed the gaze information
 import h5py
 import json
 import argparse
