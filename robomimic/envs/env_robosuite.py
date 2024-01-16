@@ -6,7 +6,7 @@ with metadata present in datasets.
 import json
 import numpy as np
 from copy import deepcopy
-
+import cv2
 import robosuite
 import robosuite.utils.transform_utils as T
 try:
@@ -193,15 +193,36 @@ class EnvRobosuite(EB.EnvBase):
                 # render() returns a tuple when self.use_depth_obs=True
                 return im[0][::-1]
             return im[::-1]
-        elif mode == "gaze":
-            # TODO: dhanush, fix later
-            cam_id = self.env.sim.model.camera_name2id(camera_name)
-            self.env.viewer.set_camera(cam_id)
-            im = self.env.render(gaze=True)
+        elif mode == "dual":
+        
+            # Dual mode - bad implementation # TODO: dhanush, remove later
+            # cam_id = self.env.sim.model.camera_name2id(camera_name)
+            # self.env.viewer.set_camera(cam_id)
+            # im = self.env.render(gaze=True)
             # RGB ARRAY PART #
             # im = self.env.sim.render(height=height, width=width, camera_name=camera_name)
             # import pdb; pdb.set_trace()
-            return im[::-1]
+            # return im[::-1]
+            #-------------------#
+
+            # dual mode - correct implementation
+            image = self.env.sim.render(height=height, width=width, camera_name=camera_name)
+
+            # Rendering this image onto the screen 
+            image_display = image[..., ::-1]
+            image_display = np.flip(image_display, axis=0)
+            cv2.imshow("offscreen render", image_display)
+            
+            key = cv2.waitKey(1)
+            # if self.keypress_callback:
+                # self.keypress_callback(key)
+
+            if self.use_depth_obs:
+                # render() returns a tuple when self.use_depth_obs=True
+                return image[0][::-1]
+            return image[::-1]
+            #-------------------#
+
 
         else:
             raise NotImplementedError("mode={} is not implemented".format(mode))

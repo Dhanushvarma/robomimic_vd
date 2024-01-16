@@ -74,6 +74,7 @@ import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.obs_utils as ObsUtils
 from robomimic.envs.env_base import EnvBase
 from robomimic.algo import RolloutPolicy, RolloutPolicy_HBC #TODO: one of the main changes
+from screeninfo import get_monitors
 
 
 def initialize_wandb(project_name, experiment_name, config=None):
@@ -198,7 +199,7 @@ def calculate_max_column_variance(subgoal_data):
 
 
 
-def extract_world_from_subgoals(subgoal_samples_dict):
+def subgoal_ee_pos(subgoal_samples_dict):
     """
     Extracts the position of the end-effector (eef) of robot0 from a dictionary of subgoal samples
     and converts it to a NumPy array in the desired shape.
@@ -303,14 +304,22 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
         traj.update(dict(obs=[], next_obs=[]))
 
     #Gaze Related Stuff
-    gaze_util_obj = GazeUtils.gaze_data_util(3440, 1440)  # Input the actual screen size
+    gaze_util_obj = GazeUtils.gaze_data_util(3440, 1440)  # TODO: fix the hardcoding
 
     try:
-        for step_i in range(0,horizon): #TODO: Check if this is fine
+        for step_i in range(0,horizon): #TODO: Check the indexing logic
 
             print(step_i)
-            gaze_data_dict = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message())
-            print("The actual gaze is", gaze_data_dict)
+
+            gaze_data_dict, gaze_data_raw = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message()) # Getting gaze information
+
+            # --Format of Data -- #
+            # gaze_data_dict_adj['pixel_x']
+            # gaze_data_dict_adj['pixel_y']
+            # gaze_data_raw['FPOGX']
+            # gaze_data_raw['FPOGY']
+            #---------------------#
+
             interval = 50   #TODO: Currently manually inputting the subgoal update interval, improve this
 
             # Check if time to update subgoal
@@ -319,32 +328,39 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
                 # get subgoal samples from planner (VAE)
                 sg_proposals = policy.subgoal_proposals(ob=obs)
 
-                print("The shape of the subgoal proposal is", sg_proposals['robot0_eef_pos'].shape)
-                world_points = extract_world_from_subgoals(sg_proposals)
-                pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 1440, 3440)  #TODO: check numbers
+                print("The shape of the subgoal proposal is", sg_proposals['robot0_eef_pos'].shape) # Debugging
+                world_points = subgoal_ee_pos(sg_proposals) # Extracting the eef position of all the subgoal samples, EEF world frame coordinates
+
+                # Projecting the eef position onto the render screen frame
+                pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 1440, 3440)  #TODO: check screen dimensions
 
                 var_world_sg, var_pixel_sg = calculate_max_column_variance(world_points), calculate_max_column_variance(pp_sgs) #Computing Column wise variance and taking the max
                 #TODO: Do not only track the maximum, track all the (x,y,z) - World points, (x,y) - Gaze Points
 
+                # To keep track of the variance
                 subgoal_stats['var_eef_world_coordinates'].append(var_world_sg) # Adding to dict
                 subgoal_stats['var_eef_pixel_locations'].append(var_pixel_sg)   # Adding to dict
 
                 eef_input = torch.rand(1, 3).cuda()  # Dummy eef position #TODO: this is stupid, safely remove.
-                gaze_input = np.random.rand(1,2) # Here we need to provide the actual gaze input #TODO: provide actual gaze input
+                # gaze_input = np.random.rand(1,2) # Here we need to provide the actual gaze input #TODO: provide actual gaze input
+                # gaze_input = np.array([[gaze_data_raw['FPOGX'], gaze_data_raw['FPOGY']]])
+                gaze_input = np.array([[gaze_data_dict['pixel_x'], gaze_data_dict['pixel_y']]])
+
 
                 ###
                 # gaze_data_dict = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message())
                 # print("The actual gaze is", gaze_data_dict)
                 ###
                 
-                
-                subgoal_index_from_gaze = eef_subgoal_index(sg_proposals, eef_input) # Closest point in eef coordinates, 3D #TODO: this is stupid, safely remove.
+                # pdb.set_trace()
+                # subgoal_index_from_gaze = eef_subgoal_index(sg_proposals, eef_input) # Closest point in eef coordinates, 3D #TODO: this is stupid, safely remove.
                 subgoal_index_from_gaze = gaze_subgoal_index(pp_sgs=pp_sgs, gaze_input=gaze_input) # Closest point in pixel coordinates, 2D
                
-                choosen_subgoal = choose_subgoal(sg_proposals, subgoal_index_from_gaze) # Currently we are giving index for choosing from the samples
+                choosen_subgoal = choose_subgoal(sg_proposals, subgoal_index_from_gaze) # Choosing by index from the samples
 
-                policy.set_subgoal(choosen_subgoal) ### Setting the subgoal for the actor
-                #---------------------
+                policy.set_subgoal(choosen_subgoal) # Setting the subgoal using setter function
+
+                #---------------------#
                 #TODO: wandb logging of gaze statistics
 
 
@@ -359,19 +375,45 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
             success = env.is_success()["task"]
 
             # visualization
-            # if render:
-                # env.render(mode="human", camera_name=camera_names[0], width=3440, height=1440)  #TODO: need to put the correct numbers, being overridden by OpenCv ?
+            if render:
+                env.render(mode="human", camera_name=camera_names[0], width=3440, height=1440)  #TODO: need to put the correct numbers, being overridden by OpenCv ?
                 
             if video_writer is not None:
                 if video_count % video_skip == 0:
                     video_img = []
-                    # env.render(mode="human", camera_name=camera_names[0], width=3440, height=1440)
                     for cam_name in camera_names:
-                        current_frame = env.render(mode="test", height=1440, width=3440, camera_name=cam_name) #TODO: need a render method which returns the image and renders onscreen
-                        edited_frame = cv2.drawMarker(np.float32(current_frame), (int(gaze_data_dict['pixel_x']), 
-                                                                                  int(gaze_data_dict['pixel_y'])), color=(0, 0, 255), 
-                                                                                  markerType=cv2.MARKER_CROSS, markerSize=100, 
-                                                                                  thickness=2)
+                        current_frame = env.render(mode="dual", height=1440, width=3440, camera_name=cam_name) #TODO: check dual render in env_robosuite.py
+                        edited_frame = cv2.drawMarker(np.uint8(current_frame.copy()), (int(gaze_data_dict['pixel_x']), 
+                                                                                  int(gaze_data_dict['pixel_y'])), color=(0, 255, 0), 
+                                                                                  markerType=cv2.MARKER_CROSS, markerSize=50, 
+                                                                                  thickness=2) # TODO: uint8?
+                        
+
+                        texts = [
+                            f"Sim step: {step_i}",
+                            f"Gaze(Y, X): ({gaze_data_dict['pixel_y']}, {gaze_data_dict['pixel_x']})",
+                            f"Current subgoal: {pp_sgs[subgoal_index_from_gaze]}",
+                            f"Task Uncertainty world: {var_world_sg}",
+                            f"Task Uncertainty pixels: {var_pixel_sg}"
+                        ]
+
+                        font_scale = 1.0
+                        font = cv2.FONT_HERSHEY_SIMPLEX
+                        thickness = 1
+                        text_color = (0, 0, 255)
+
+                        # Calculate the maximum width of text and height
+                        text_size = [cv2.getTextSize(text, font, font_scale, thickness)[0] for text in texts]
+                        max_text_width = max([size[0] for size in text_size])
+                        max_text_height = max([size[1] for size in text_size])
+
+                        # Starting Y position (bottom of the frame)
+                        start_y = edited_frame.shape[0] - len(texts) * max_text_height
+
+                        for i, text in enumerate(texts):
+                            position = (edited_frame.shape[1] - max_text_width - 10, start_y + i * max_text_height)  # 10 pixels padding
+                            cv2.putText(edited_frame, text, position, font, font_scale, text_color, thickness)
+
                         video_img.append(edited_frame)
                     video_img = np.concatenate(video_img, axis=1) # concatenate horizontally
                     video_writer.append_data(video_img)
@@ -451,21 +493,21 @@ def run_trained_agent(args):
         rollout_horizon = config.experiment.rollout.horizon
 
     # create environment from saved checkpoint
-    # env, _ = FileUtils.env_from_checkpoint(
-    #     ckpt_dict=ckpt_dict, 
-    #     env_name=args.env, 
-    #     render=args.render, 
-    #     render_offscreen=(args.video_path is not None), 
-    #     verbose=True,
-    # )
-
     env, _ = FileUtils.env_from_checkpoint(
         ckpt_dict=ckpt_dict, 
         env_name=args.env, 
-        render=True, 
-        render_offscreen=True, 
+        render=args.render, 
+        render_offscreen=(args.video_path is not None), 
         verbose=True,
     )
+
+    # env, _ = FileUtils.env_from_checkpoint(
+    #     ckpt_dict=ckpt_dict, 
+    #     env_name=args.env, 
+    #     render=True, 
+    #     render_offscreen=True, 
+    #     verbose=True,
+    # )
 
 
     # maybe set seed

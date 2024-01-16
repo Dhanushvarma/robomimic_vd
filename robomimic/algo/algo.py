@@ -531,7 +531,7 @@ class RolloutPolicy_HBC(object):
         ob = self._prepare_observation(ob)
         if goal is not None:
             goal = self._prepare_observation(goal) 
-        subgoal_proposals_from_policy = self.policy.get_sg_props(obs_dict=ob, goal_dict=None) #Verify Goal
+        subgoal_proposals_from_policy = self.policy.get_sg_props(obs_dict=ob, goal_dict=None) # TODO: veridy logic
         return subgoal_proposals_from_policy
     
     def set_subgoal(self, choosen_subgoal):

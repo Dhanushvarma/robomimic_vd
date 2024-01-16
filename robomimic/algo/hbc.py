@@ -329,7 +329,7 @@ class HBC(HierarchicalAlgo):
             print("I am being set")
         '''
             
-        action = self.actor.get_action(obs_dict=obs_dict, goal_dict=self.current_subgoal)
+        action = self.actor.get_action(obs_dict=obs_dict, goal_dict=self.current_subgoal) #TODO: verify the goal_dict being passed
         self._subgoal_step_count += 1
 
         # print("The subgoal being used is:", self.current_subgoal['robot0_eef_pos'])

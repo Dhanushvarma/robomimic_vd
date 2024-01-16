@@ -35,4 +35,4 @@ class gaze_data_util:
         output_dict['pixel_x'] = self.width * gaze_data_dict['FPOGX']
         output_dict['pixel_y'] = self.height * gaze_data_dict['FPOGY']
 
-        return output_dict
+        return output_dict, gaze_data_dict
