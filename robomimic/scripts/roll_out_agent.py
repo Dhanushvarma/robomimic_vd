@@ -387,6 +387,22 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
                                                                                   int(gaze_data_dict['pixel_y'])), color=(0, 255, 0), 
                                                                                   markerType=cv2.MARKER_CROSS, markerSize=50, 
                                                                                   thickness=2) # TODO: uint8?
+
+
+                        edited_frame = cv2.drawMarker(np.uint8(edited_frame.copy()), (int(pp_sgs[subgoal_index_from_gaze][0]), 
+                                                                                  int(pp_sgs[subgoal_index_from_gaze][1])), color=(0, 255, 0), 
+                                                                                  markerType=cv2.MARKER_CROSS, markerSize=50, 
+                                                                                  thickness=2) # TODO: verify if this is correct maker 
+                        # TODO: check if np.unit8 
+                        if step_i % interval ==0:
+                            for point in pp_sgs:
+                                x, y = int(point[0]), int(point[1])
+                                # Draw a marker for each point
+                                edited_frame = cv2.drawMarker(np.uint8(edited_frame.copy()), (x, y), 
+                                                color=(255, 0, 0),  # Different color for these markers
+                                                markerType=cv2.MARKER_CROSS, 
+                                                markerSize=10,  # Adjust size as needed
+                                                thickness=1)    # Adjust thickness as needed
                         
 
                         texts = [
