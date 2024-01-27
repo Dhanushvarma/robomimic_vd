@@ -320,7 +320,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
             # gaze_data_raw['FPOGY']
             #---------------------#
 
-            interval = 50   #TODO: Currently manually inputting the subgoal update interval, improve this
+            interval = 100   #TODO: Currently manually inputting the subgoal update interval, improve this
 
             # Check if time to update subgoal
             if step_i % interval == 0:
@@ -333,6 +333,8 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
                 # Projecting the eef position onto the render screen frame
                 pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 1440, 3440)  #TODO: check screen dimensions
+
+                pp_sgs = pp_sgs[:, ::-1] #NOTE(dhanush): This reversing is done as the format is reverted.,
 
                 var_world_sg, var_pixel_sg = calculate_max_column_variance(world_points), calculate_max_column_variance(pp_sgs) #Computing Column wise variance and taking the max
                 #TODO: Do not only track the maximum, track all the (x,y,z) - World points, (x,y) - Gaze Points
@@ -357,6 +359,8 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
                 subgoal_index_from_gaze = gaze_subgoal_index(pp_sgs=pp_sgs, gaze_input=gaze_input) # Closest point in pixel coordinates, 2D
                
                 choosen_subgoal = choose_subgoal(sg_proposals, subgoal_index_from_gaze) # Choosing by index from the samples
+
+                # pdb.set_trace()
 
                 policy.set_subgoal(choosen_subgoal) # Setting the subgoal using setter function
 
@@ -384,7 +388,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
                     for cam_name in camera_names:
                         current_frame = env.render(mode="dual", height=1440, width=3440, camera_name=cam_name) #TODO: check dual render in env_robosuite.py
                         edited_frame = cv2.drawMarker(np.uint8(current_frame.copy()), (int(gaze_data_dict['pixel_x']), 
-                                                                                  int(gaze_data_dict['pixel_y'])), color=(0, 255, 0), 
+                                                                                  int(gaze_data_dict['pixel_y'])), color=(0, 0, 0), 
                                                                                   markerType=cv2.MARKER_CROSS, markerSize=50, 
                                                                                   thickness=2) # TODO: uint8?
 
@@ -397,6 +401,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
                         if step_i % interval ==0:
                             for point in pp_sgs:
                                 x, y = int(point[0]), int(point[1])
+                                # y, x = int(point[0]), int(point[1]) #NOTE(dhanush): gaze in the pixel converted subgoals have reverted order. 
                                 # Draw a marker for each point
                                 edited_frame = cv2.drawMarker(np.uint8(edited_frame.copy()), (x, y), 
                                                 color=(255, 0, 0),  # Different color for these markers
