@@ -286,6 +286,10 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     obs = env.reset()
     state_dict = env.get_state()
 
+    # print(state_dict)
+
+    # import pdb; pdb.set_trace()
+
     # hack that is necessary for robosuite tasks for deterministic action playback
     obs = env.reset_to(state_dict)
 
@@ -309,9 +313,12 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     try:
         for step_i in range(0,horizon): #TODO: Check the indexing logic
 
-            print(step_i)
+            # print(step_i)
 
-            gaze_data_dict, gaze_data_raw = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message()) # Getting gaze information
+            # gaze_data_dict, gaze_data_raw = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message()) # Getting gaze information
+            #NOTE(dhanush): (pixel_x:1850, pixel_y: 900): corresponds to the green block - FAKE GAZE
+            #NOTE(dhanush): (pixel_x:1600, pixel_y: 900): corresponds to the red block - FAKE GAZE
+            gaze_data_dict = {'pixel_x' : 1600, 'pixel_y': 900} 
 
             # --Format of Data -- #
             # gaze_data_dict_adj['pixel_x']
@@ -320,7 +327,8 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
             # gaze_data_raw['FPOGY']
             #---------------------#
 
-            interval = 100   #TODO: Currently manually inputting the subgoal update interval, improve this
+            interval = 10
+               #TODO: Currently manually inputting the subgoal update interval, improve this
 
             # Check if time to update subgoal
             if step_i % interval == 0:
@@ -550,9 +558,9 @@ def run_trained_agent(args):
 
     # Setup wandb Script
     # wandb_run = initialize_wandb("my_rollout_project", "multiple_rollout_experiment")
-    gaze_client = SimpleClient('192.168.1.93', 5478, 102)  # IPv4(windows), Port Number, len(meesage)
-    gaze_client.connect_to_server()
-
+    gaze_client = SimpleClient('192.168.1.93', 5478, 102)  # IPv4(windows), Port Number, len(meesage) #NOTE(dhanush): Gaze Relevant stuff
+    # gaze_client.connect_to_server() #NOTE(dhanush): Gaze Relevant stuff
+ 
     rollout_stats = []
     subgoal_stats_cumulative = []
     for i in range(rollout_num_episodes):
@@ -599,7 +607,7 @@ def run_trained_agent(args):
             ep_data_grp.attrs["num_samples"] = traj["actions"].shape[0] # number of transitions in this episode
             total_samples += traj["actions"].shape[0]
 
-    gaze_client.disconnect()  # Disconnecting from the Windows Server
+    # gaze_client.disconnect()  # Disconnecting from the Windows Server #NOTE(dhanush): Gaze Relevant stuff
 
     rollout_stats = TensorUtils.list_of_flat_dict_to_dict_of_list(rollout_stats)
     avg_rollout_stats = { k : np.mean(rollout_stats[k]) for k in rollout_stats }

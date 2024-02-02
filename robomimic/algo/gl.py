@@ -468,7 +468,7 @@ class GL_VAE(GL):
             return OrderedDict(latent_subgoal=latent_subgoals)
 
         # sample a single goal from the VAE
-        goals = self.sample_subgoals(obs_dict=obs_dict, goal_dict=goal_dict, num_samples=500) #NOTE(dhanush): Here we set the number of samples for subgoals
+        goals = self.sample_subgoals(obs_dict=obs_dict, goal_dict=goal_dict, num_samples=100) #NOTE(dhanush): Here we set the number of samples for subgoals
 
         if return_all_samples:
             return { k: goals[k] for k in goals }
