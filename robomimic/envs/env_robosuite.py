@@ -209,11 +209,11 @@ class EnvRobosuite(EB.EnvBase):
             image = self.env.sim.render(height=height, width=width, camera_name=camera_name)
 
             # Rendering this image onto the screen 
-            image_display = image[..., ::-1]
-            image_display = np.flip(image_display, axis=0)
-            cv2.imshow("offscreen render", image_display)
+            # image_display = image[..., ::-1]
+            # image_display = np.flip(image_display, axis=0)
+            # cv2.imshow("offscreen render", image_display)
             
-            key = cv2.waitKey(1)
+            # key = cv2.waitKey(1)
             # if self.keypress_callback:
                 # self.keypress_callback(key)
 

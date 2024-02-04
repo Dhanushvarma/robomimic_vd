@@ -318,7 +318,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
             # gaze_data_dict, gaze_data_raw = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message()) # Getting gaze information
             #NOTE(dhanush): (pixel_x:1850, pixel_y: 900): corresponds to the green block - FAKE GAZE
             #NOTE(dhanush): (pixel_x:1600, pixel_y: 900): corresponds to the red block - FAKE GAZE
-            gaze_data_dict = {'pixel_x' : 1600, 'pixel_y': 900} 
+            gaze_data_dict = {'pixel_x' : 1850, 'pixel_y': 900}
 
             # --Format of Data -- #
             # gaze_data_dict_adj['pixel_x']
@@ -327,7 +327,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
             # gaze_data_raw['FPOGY']
             #---------------------#
 
-            interval = 10
+            interval = 50 #NOTE(aliang) : you have to manually change the subgoal update interval
                #TODO: Currently manually inputting the subgoal update interval, improve this
 
             # Check if time to update subgoal
