@@ -119,6 +119,8 @@ class GL(PlannerAlgo):
 
         # we move to device first before float conversion because image observation modalities will be uint8 -
         # this minimizes the amount of data transferred to GPU
+
+        # import pdb; pdb.set_trace()
         return TensorUtils.to_float(TensorUtils.to_device(input_batch, self.device))
 
     def get_actor_goal_for_training_from_processed_batch(self, processed_batch, **kwargs):

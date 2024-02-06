@@ -1,0 +1,28 @@
+# Model Configuration
+input_dim: 64        # Dimension of the input state
+output_dim : 4
+hidden_dim  : 1024
+
+
+
+# Training Configuration
+learning_rate: 0.001  # Learning rate for the optimizer
+batch_size: 64        # Batch size for data loading
+num_epochs: 20        # Total number of training epochs
+gradient_steps_per_epoch : 10
+horizon: 5            # Timestep gap for (s_t, s_g) pairs
+run_name : "dummy_run"
+dataset_path : "/home/dhanush/robomimic_vd/robomimic/scripts/gaze_pred_sketch/low_dim_with_gaze.hdf5"
+
+# wandb Integration
+wandb_project: 'dummy'       # Project name in wandb
+wandb_entity: 'dummy_entity'         # Your wandb entity (username or team name)
+wandb_name: 'dummy_exp'       # Name for this particular run/experiment
+
+# Checkpointing
+save_checkpoint_steps: 1000        # Frequency of checkpoint saving (every 1000 steps)
+checkpoint_dir: './checkpoints'    # Directory to save checkpoints
+log_frequency : 1
+
+# DataLoader Configuration
+num_workers: 4                      # Number of worker threads for data loading
