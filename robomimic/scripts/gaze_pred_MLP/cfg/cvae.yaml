@@ -6,23 +6,21 @@ hidden_dim  : 1024
 
 
 # Training Configuration
-learning_rate: 0.001  # Learning rate for the optimizer
+learning_rate: 0.0001  # Learning rate for the optimizer
 batch_size: 64        # Batch size for data loading
-num_epochs: 20        # Total number of training epochs
-gradient_steps_per_epoch : 10
-horizon: 5            # Timestep gap for (s_t, s_g) pairs
-run_name : "dummy_run"
-dataset_path : "/home/dhanush/robomimic_vd/robomimic/scripts/gaze_pred_sketch/low_dim_with_gaze.hdf5"
+num_epochs: 15000        # Total number of training epochs
+gradient_steps_per_epoch : 100
+run_name : "Feb_5_trial_2"
+dataset_path : "/home/dpenmets/LIRA_work/robomimic_vd/robomimic/scripts/final_cfgs/demo_data_with_gaze/low_dim_gaze.hdf5"
 
 # wandb Integration
-wandb_project: 'dummy'       # Project name in wandb
-wandb_entity: 'dummy_entity'         # Your wandb entity (username or team name)
-wandb_name: 'dummy_exp'       # Name for this particular run/experiment
+wandb_project: 'Feb_5'       # Project name in wandb
+wandb_entity: 'lira_pato'         # Your wandb entity (username or team name)
+wandb_name: 'Feb_5_plain_exp_2'       # Name for this particular run/experiment
 
 # Checkpointing
-save_checkpoint_steps: 1000        # Frequency of checkpoint saving (every 1000 steps)
 checkpoint_dir: './checkpoints'    # Directory to save checkpoints
-log_frequency : 1
+log_frequency : 1000
 
 # DataLoader Configuration
 num_workers: 4                      # Number of worker threads for data loading

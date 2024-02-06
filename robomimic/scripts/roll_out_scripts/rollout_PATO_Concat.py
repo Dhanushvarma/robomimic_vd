@@ -63,7 +63,7 @@ import torch
 import wandb
 from wandb import plot
 import cv2
-from gaze_socket_client import SimpleClient
+from robomimic.scripts.gaze_sensor.gaze_socket_client import SimpleClient
 
 import robomimic
 import robomimic.utils.gaze_data_utils as GazeUtils
@@ -75,188 +75,12 @@ import robomimic.utils.obs_utils as ObsUtils
 from robomimic.envs.env_base import EnvBase
 from robomimic.algo import RolloutPolicy, RolloutPolicy_HBC #TODO: one of the main changes
 from screeninfo import get_monitors
+from robomimic.scripts.roll_out_scripts.rollout_utils import *
+
+# TODO(dhanush) : VERIFY THE WORKING FOR THIS CONCAT APPROACH
 
 
-def initialize_wandb(project_name, experiment_name, config=None):
-    """
-    Initialize a Weights & Biases (WandB) run.
-
-    Args:
-        project_name (str): The name of the WandB project.
-        experiment_name (str): The name of this particular experiment/run.
-        config (dict, optional): Configuration parameters for the run (like hyperparameters).
-
-    Returns:
-        wandb.run: The WandB run object.
-    """
-    wandb_run = wandb.init(project=project_name, name=experiment_name, config=config)
-    return wandb_run
-
-
-""" def plot_arrays_in_wandb(wandb_run, array_list):
-    for array_index, array in enumerate(array_list):
-        for idx, value in enumerate(array):
-            wandb_run.log({f'Rollout_{array_index}': value, 'index': idx})
-
-def plot_arrays_with_wandb_tables(wandb_run, array_list):
-    # Define the column names for the table
-    columns = ["Index"] + [f"Rollout_{i}" for i in range(len(array_list))]
-
-    # Create a W&B Table
-    table = wandb.Table(columns=columns)
-
-    # Find the maximum length of the arrays
-    max_length = max(len(array) for array in array_list)
-
-    # Fill the table with data
-    for idx in range(max_length):
-        row = [idx] + [array[idx] if idx < len(array) else None for array in array_list]
-        table.add_data(*row)
-
-    # Log the table to W&B
-    wandb_run.log({"array_data": table})
-
-    # Create a line plot (optional, can be done in the W&B UI)
-    wandb_run.log({"line_plot": wandb.plot.line(table, "Index", [f"Rollout_{i}" for i in range(len(array_list))],
-                                               title="Line Plot of Arrays")}) """
-
-
-def eef_subgoal_index(sg_proposals, gaze_input):
-    """
-    Find the index of the subgoal in sg_proposals that is closest to the gaze_input in Euclidean distance.
-
-    Args:
-        sg_proposals (dict): Dictionary containing subgoal proposals.
-        gaze_input (torch.Tensor): Gaze input tensor of shape [1, 3].
-
-    Returns:
-        int: Index of the closest subgoal.
-    """
-    # Extract the subgoals
-    subgoals = sg_proposals['robot0_eef_pos']  # Shape: [1, N, 3]
-
-    # Calculate Euclidean distances
-    distances = torch.norm(subgoals - gaze_input, dim=2)
-
-    # Find the index of the minimum distance
-    min_distance_idx = torch.argmin(distances)
-
-    return min_distance_idx.item()
-
-
-def gaze_subgoal_index(pp_sgs, gaze_input):
-    """
-    Find the index of the point in pp_sgs that is closest to the single gaze_input point in Euclidean distance.
-
-    Args:
-        pp_sgs (np.ndarray): Point positions, an array of shape [N, 2].
-        gaze_input (np.ndarray): Gaze input array of shape [1, 2].
-
-    Returns:
-        int: Index of the closest point in pp_sgs.
-    """
-    # Calculate Euclidean distances between gaze_input and each point in pp_sgs
-    # Since gaze_input is [1, 2], it will broadcast over [N, 2]
-    distances = np.linalg.norm(pp_sgs - gaze_input, axis=1)
-
-    # Find the index of the minimum distance
-    min_distance_idx = np.argmin(distances)
-
-    return min_distance_idx
-
-
-def plot_array(data, title):
-    """
-    Plot a given numpy array of size (n,) as a line plot.
-
-    Args:
-        data (np.array): A numpy array of size (n,).
-    """
-    plt.figure(figsize=(10, 6))
-    plt.plot(data, linestyle='-', marker='o', color='b')
-    plt.grid(True)
-    plt.title(title)
-    plt.xlabel('Subgoal Call Index')
-    plt.ylabel('Variance')
-    plt.show()
-
-
-def calculate_max_column_variance(subgoal_data):
-    """
-    Calculate the maximum of the column-wise variances for a given (N, 3) numpy array.
-
-    Args:
-        subgoal_data (np.array): An (N, 3) numpy array.
-
-    Returns:
-        float: The maximum variance value among the three columns.
-    """
-    # Calculate variance along each column (axis=0)
-    variances = np.var(subgoal_data, axis=0)
-
-    # Return the maximum of the three variance values
-    return np.max(variances)
-
-
-
-def subgoal_ee_pos(subgoal_samples_dict):
-    """
-    Extracts the position of the end-effector (eef) of robot0 from a dictionary of subgoal samples
-    and converts it to a NumPy array in the desired shape.
-
-    Args:
-        subgoal_samples_dict (dict): A dictionary containing various subgoal samples. It should
-                                     include the key 'robot0_eef_pos', which is a PyTorch tensor.
-
-    Returns:
-        numpy.ndarray: A NumPy array containing the end-effector positions, reshaped to [..., 3].
-
-    Raises:
-        KeyError: If 'robot0_eef_pos' is not a key in the input dictionary.
-        TypeError: If the value associated with 'robot0_eef_pos' is not a PyTorch tensor.
-    """
-    try:
-        # Ensure 'robot0_eef_pos' is in the dictionary
-        eef_pos_tensor = subgoal_samples_dict['robot0_eef_pos']
-
-        # Check if it's a PyTorch tensor
-        if not isinstance(eef_pos_tensor, torch.Tensor):
-            raise TypeError("The 'robot0_eef_pos' entry must be a PyTorch tensor.")
-
-        # Move tensor to CPU, detach from the computation graph, convert to NumPy array, and reshape
-        return eef_pos_tensor.cpu().detach().numpy().reshape(-1, 3)
-
-    except KeyError:
-        raise KeyError("The key 'robot0_eef_pos' was not found in the input dictionary.")
-
-
-
-def choose_subgoal(sg_proposals, choose_subgoal_index):
-    """
-    Selects a specific subgoal for each key in the provided proposals based on the given index.
-
-    Args:
-        sg_proposals (dict): A dictionary containing subgoal proposals, where each key maps to a list of tensors.
-        choose_subgoal_index (int): The index of the subgoal to be selected for each key.
-
-    Returns:
-        dict: A dictionary with the chosen subgoal for each key.
-
-    Raises:
-        IndexError: If the `choose_subgoal_index` is out of range for any of the subgoal lists.
-    """
-    chosen_subgoal = {}
-
-    for key in sg_proposals:
-        if not (0 <= choose_subgoal_index < len(sg_proposals[key][0])):
-            raise IndexError(f"Index {choose_subgoal_index} is out of range for key '{key}'.")
-
-        chosen_subgoal[key] = sg_proposals[key][0][choose_subgoal_index].unsqueeze(0)
-
-    return chosen_subgoal
-
-
-def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None, wandb_object=None, rollout_number=None, socket_obj=None):
+def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5, return_obs=False, camera_names=None, rollout_number=None, socket_obj=None):
     """
     Helper function to carry out rollouts. Supports on-screen rendering, off-screen rendering to a video, 
     and returns the rollout trajectory.
@@ -280,28 +104,24 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     """
     assert isinstance(env, EnvBase)
     assert isinstance(policy, RolloutPolicy_HBC)
-    # assert not (render and (video_writer is not None))
+    # assert not (render and (video_writer is not None)) #NOTE(dhanush): You have commneted this
 
     policy.start_episode()
     obs = env.reset()
     state_dict = env.get_state()
 
-    # print(state_dict)
-
-    # import pdb; pdb.set_trace()
-
     # hack that is necessary for robosuite tasks for deterministic action playback
     obs = env.reset_to(state_dict)
 
-    ### We obtain the camera trnasformation matrix for the env
-    camera_transformation_matrix = env.get_camera_transform_matrix(camera_names[0], 1440, 3440)  #TODO: check numbers
+    # CAMERA TRANSFORMATION MATRIX
+    camera_transformation_matrix = env.get_camera_transform_matrix(camera_names[0], 1440, 3440)  #NOTE(dhanush) : Need to adapt the number as per screen size
 
     results = {}
     video_count = 0  # video frame counter
     total_reward = 0.
     # subgoal_poll_count = 0
     traj = dict(actions=[], rewards=[], dones=[], states=[], initial_state_dict=state_dict)
-    subgoal_stats = dict( var_eef_world_coordinates=[], var_eef_pixel_locations=[]) # We are directly storing the variances instead of the actual input values
+    subgoal_stats = dict( var_eef_world_coordinates=[], var_eef_pixel_locations=[]) # STORING VARIANCE, NOT ACTUAL VALUES
 
     if return_obs:
         # store observations too
@@ -313,12 +133,16 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     try:
         for step_i in range(0,horizon): #TODO: Check the indexing logic
 
-            # print(step_i)
-
-            # gaze_data_dict, gaze_data_raw = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message()) # Getting gaze information
+            # gaze_data_dict, gaze_data_raw = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message()) # NOTE(dhanush) : This is where actual gaze is provided
             #NOTE(dhanush): (pixel_x:1850, pixel_y: 900): corresponds to the green block - FAKE GAZE
             #NOTE(dhanush): (pixel_x:1600, pixel_y: 900): corresponds to the red block - FAKE GAZE
+
             gaze_data_dict = {'pixel_x' : 1850, 'pixel_y': 900}
+            gaze_input = np.array([[gaze_data_dict['pixel_x'], gaze_data_dict['pixel_y']]]) # NOTE(dhanush) : CONVERTING INTO REQUIRED FORMAT FOR FUNCTIONS
+
+            # HACK(dhanush) : FOR THE CONCAT APPROACH, WE NEED TO PROVIDE GAZE INTO THE OBSERVATIONS
+            obs.update({'human_gaze' : gaze_input.reshape((2,))})
+
 
             # --Format of Data -- #
             # gaze_data_dict_adj['pixel_x']
@@ -328,59 +152,55 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
             #---------------------#
 
             interval = 50 #NOTE(aliang) : you have to manually change the subgoal update interval
-               #TODO: Currently manually inputting the subgoal update interval, improve this
+            #TODO: Currently manually inputting the subgoal update interval, improve this
 
             # Check if time to update subgoal
             if step_i % interval == 0:
 
-                # get subgoal samples from planner (VAE)
+                # SUBGOAL SAMPLES FROM {VAE} - HIGH LEVEL PLANNER
+
                 sg_proposals = policy.subgoal_proposals(ob=obs)
 
-                print("The shape of the subgoal proposal is", sg_proposals['robot0_eef_pos'].shape) # Debugging
-                world_points = subgoal_ee_pos(sg_proposals) # Extracting the eef position of all the subgoal samples, EEF world frame coordinates
+                world_points = subgoal_ee_pos(sg_proposals) # NOTE(dhanush) : We extract the EE POS from the subgoal proposals
 
-                # Projecting the eef position onto the render screen frame
+                #NOTE(dhanush) Projecting the EEF POS onto {RENDER SCREEN} FRAME
                 pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 1440, 3440)  #TODO: check screen dimensions
 
-                pp_sgs = pp_sgs[:, ::-1] #NOTE(dhanush): This reversing is done as the format is reverted.,
+                pp_sgs = pp_sgs[:, ::-1] #NOTE(dhanush): ORDER REVERSAL TO GET IN EXPECTED FORMAT
 
                 var_world_sg, var_pixel_sg = calculate_max_column_variance(world_points), calculate_max_column_variance(pp_sgs) #Computing Column wise variance and taking the max
-                #TODO: Do not only track the maximum, track all the (x,y,z) - World points, (x,y) - Gaze Points
 
-                # To keep track of the variance
+                # TRACKING THE VARIANCE IN BOTH WOLRD POS AND {RENDER_SCREEN_FRAME}
                 subgoal_stats['var_eef_world_coordinates'].append(var_world_sg) # Adding to dict
                 subgoal_stats['var_eef_pixel_locations'].append(var_pixel_sg)   # Adding to dict
 
-                eef_input = torch.rand(1, 3).cuda()  # Dummy eef position #TODO: this is stupid, safely remove.
-                # gaze_input = np.random.rand(1,2) # Here we need to provide the actual gaze input #TODO: provide actual gaze input
-                # gaze_input = np.array([[gaze_data_raw['FPOGX'], gaze_data_raw['FPOGY']]])
-                gaze_input = np.array([[gaze_data_dict['pixel_x'], gaze_data_dict['pixel_y']]])
+                # import pdb; pdb.set_trace()
 
-
-                ###
-                # gaze_data_dict = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message())
-                # print("The actual gaze is", gaze_data_dict)
-                ###
-                
-                # pdb.set_trace()
-                # subgoal_index_from_gaze = eef_subgoal_index(sg_proposals, eef_input) # Closest point in eef coordinates, 3D #TODO: this is stupid, safely remove.
-                subgoal_index_from_gaze = gaze_subgoal_index(pp_sgs=pp_sgs, gaze_input=gaze_input) # Closest point in pixel coordinates, 2D
+                subgoal_index = np.random.randint(0, sg_proposals['robot0_eef_pos'].shape[1]) # NOTE(dhanush) : CHOOSE ONE OF THE SAMPLES FROM THE PLANNER
                
-                choosen_subgoal = choose_subgoal(sg_proposals, subgoal_index_from_gaze) # Choosing by index from the samples
+                choosen_subgoal = choose_subgoal(sg_proposals, subgoal_index) # USING INDEX TO CHOOSE THE RESPECTIVE SUBGOAL
 
-                # pdb.set_trace()
+                policy.set_subgoal(choosen_subgoal) # SETTING THE SUBGOAL 
 
-                policy.set_subgoal(choosen_subgoal) # Setting the subgoal using setter function
-
-                #---------------------#
                 #TODO: wandb logging of gaze statistics
 
 
-            # print("Subgoal Being used is", choosen_subgoal['robot0_gripper_qpos'])
+            # GET ACTION FROM POLICY
             act = policy(ob=obs, goal=None)
 
             # play action
             next_obs, r, done, _ = env.step(act)
+
+            
+            # gaze_data_dict, gaze_data_raw = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message()) # NOTE(dhanush) : This is where actual gaze is provided
+            #NOTE(dhanush): (pixel_x:1850, pixel_y: 900): corresponds to the green block - FAKE GAZE
+            #NOTE(dhanush): (pixel_x:1600, pixel_y: 900): corresponds to the red block - FAKE GAZE
+            gaze_data_dict = {'pixel_x' : 1850, 'pixel_y': 900}
+            gaze_input = np.array([[gaze_data_dict['pixel_x'], gaze_data_dict['pixel_y']]]) # NOTE(dhanush) : CONVERTING INTO REQUIRED FORMAT FOR FUNCTIONS
+            
+            # HACK(dhanush) : FOR THE CONCAT APPROACH, WE NEED TO PROVIDE GAZE INTO THE NEXT OBSERVATIONS
+            next_obs.update({'human_gaze' : gaze_input.reshape((2,))}) # NOTE(dhanush) : WE POLL GAZE AGAIN TO GET GAZE AFTER ENV STEP 
+
 
             # compute reward
             total_reward += r
@@ -388,40 +208,42 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
             # visualization
             if render:
-                env.render(mode="human", camera_name=camera_names[0], width=3440, height=1440)  #TODO: need to put the correct numbers, being overridden by OpenCv ?
+                env.render(mode="human", camera_name=camera_names[0], width=3440, height=1440)  #TODO: PREVENT HARDCODING THE SCREEN RESOLUTION
                 
             if video_writer is not None:
                 if video_count % video_skip == 0:
                     video_img = []
                     for cam_name in camera_names:
                         current_frame = env.render(mode="dual", height=1440, width=3440, camera_name=cam_name) #TODO: check dual render in env_robosuite.py
+
+                        # NOTE(dhanush) : MARKING GAZE ON VIDEO
                         edited_frame = cv2.drawMarker(np.uint8(current_frame.copy()), (int(gaze_data_dict['pixel_x']), 
                                                                                   int(gaze_data_dict['pixel_y'])), color=(0, 0, 0), 
                                                                                   markerType=cv2.MARKER_CROSS, markerSize=50, 
                                                                                   thickness=2) # TODO: uint8?
 
-
-                        edited_frame = cv2.drawMarker(np.uint8(edited_frame.copy()), (int(pp_sgs[subgoal_index_from_gaze][0]), 
-                                                                                  int(pp_sgs[subgoal_index_from_gaze][1])), color=(0, 255, 0), 
+                        # NOTE(dhanush) : MARKING CHOOSEN/ACTIVE SUBGOAL {EEF POS} ON VIDEO
+                        edited_frame = cv2.drawMarker(np.uint8(edited_frame.copy()), (int(pp_sgs[subgoal_index][0]), 
+                                                                                  int(pp_sgs[subgoal_index][1])), color=(0, 255, 0), 
                                                                                   markerType=cv2.MARKER_CROSS, markerSize=50, 
                                                                                   thickness=2) # TODO: verify if this is correct maker 
-                        # TODO: check if np.unit8 
-                        if step_i % interval ==0:
+                        
+                        if step_i % interval == 0:
+
+                            # NOTE(dhanush) : MARKING ALL SUBGOAL SAMPLES FROM THE PLANNER ON VIDEO
                             for point in pp_sgs:
                                 x, y = int(point[0]), int(point[1])
-                                # y, x = int(point[0]), int(point[1]) #NOTE(dhanush): gaze in the pixel converted subgoals have reverted order. 
-                                # Draw a marker for each point
                                 edited_frame = cv2.drawMarker(np.uint8(edited_frame.copy()), (x, y), 
                                                 color=(255, 0, 0),  # Different color for these markers
                                                 markerType=cv2.MARKER_CROSS, 
-                                                markerSize=10,  # Adjust size as needed
-                                                thickness=1)    # Adjust thickness as needed
+                                                markerSize=10, 
+                                                thickness=1)
                         
 
                         texts = [
                             f"Sim step: {step_i}",
                             f"Gaze(Y, X): ({gaze_data_dict['pixel_y']}, {gaze_data_dict['pixel_x']})",
-                            f"Current subgoal: {pp_sgs[subgoal_index_from_gaze]}",
+                            f"Current subgoal: {pp_sgs[subgoal_index]}",
                             f"Task Uncertainty world: {var_world_sg}",
                             f"Task Uncertainty pixels: {var_pixel_sg}"
                         ]
@@ -440,10 +262,11 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
                         start_y = edited_frame.shape[0] - len(texts) * max_text_height
 
                         for i, text in enumerate(texts):
-                            position = (edited_frame.shape[1] - max_text_width - 10, start_y + i * max_text_height)  # 10 pixels padding
+                            position = (edited_frame.shape[1] - max_text_width - 10, start_y + i * max_text_height)  
                             cv2.putText(edited_frame, text, position, font, font_scale, text_color, thickness)
 
                         video_img.append(edited_frame)
+
                     video_img = np.concatenate(video_img, axis=1) # concatenate horizontally
                     video_writer.append_data(video_img)
                 video_count += 1
@@ -488,18 +311,14 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
         else:
             traj[k] = np.array(traj[k])
 
-
-    ### We also return the subgoal 3D world co-ordinates and the pixel location corresponding to them
-
-
-
+    print("ROLLOUT DONE!") # NOTE(dhanush) : Useful when not rendering in the dual mode
     return stats, traj, subgoal_stats
 
 
 def run_trained_agent(args):
     # some arg checking
     write_video = (args.video_path is not None)
-    # assert not (args.render and write_video) # either on-screen or video but not both
+    # assert not (args.render and write_video) # either on-screen or video but not both # NOTE(dhanush) : You have commented this
     if args.render:
         # on-screen rendering can only support one camera
         assert len(args.camera_names) == 1
@@ -558,8 +377,8 @@ def run_trained_agent(args):
 
     # Setup wandb Script
     # wandb_run = initialize_wandb("my_rollout_project", "multiple_rollout_experiment")
-    gaze_client = SimpleClient('192.168.1.93', 5478, 102)  # IPv4(windows), Port Number, len(meesage) #NOTE(dhanush): Gaze Relevant stuff
-    # gaze_client.connect_to_server() #NOTE(dhanush): Gaze Relevant stuff
+    gaze_client = SimpleClient('192.168.1.93', 5478, 102) #NOTE(dhanush): IPv4(windows), PORT NUMBER, len(meesage)
+    # gaze_client.connect_to_server()  # CONNECT TO CLIENT
  
     rollout_stats = []
     subgoal_stats_cumulative = []
@@ -572,21 +391,15 @@ def run_trained_agent(args):
             video_writer=video_writer, 
             video_skip=args.video_skip, 
             return_obs=(write_dataset and args.dataset_obs),
-            camera_names=args.camera_names, wandb_object=None, rollout_number=i, socket_obj= gaze_client
+            camera_names=args.camera_names, rollout_number=i, socket_obj= gaze_client
         ) # Passing the gaze_socket object to our rollout
-
-        # wandb_run.log({'Rollout': i, 'Return': stats['Return']})
-        # wandb_run.log({'Rollout': i, 'Horizon': stats['Horizon']})
 
         rollout_stats.append(stats)
 
-        # Calculate Variances TODO: fix this wandB plotting stuff
+        # TODO (dhanush) : Fix the stats tracking stuff
         # variance_world_coordiantes = calculate_max_column_variance(subgoal_stats['eef_world_coordinates'])
         # variance_pixel_locations = calculate_max_column_variance(subgoal_stats['eef_pixel_locations'])
         subgoal_stats_cumulative.append(subgoal_stats['var_eef_pixel_locations'])
-
-        # plot_array(variance_pixel_locations, title="Variance in pixel locations")
-        # plot_array(variance_world_coordiantes, title="Variance in world coordinates")
 
 
         if write_dataset:
@@ -607,17 +420,14 @@ def run_trained_agent(args):
             ep_data_grp.attrs["num_samples"] = traj["actions"].shape[0] # number of transitions in this episode
             total_samples += traj["actions"].shape[0]
 
-    # gaze_client.disconnect()  # Disconnecting from the Windows Server #NOTE(dhanush): Gaze Relevant stuff
-
+    # gaze_client.disconnect()  # DISCONNECT GAZE SENSOR
+            
     rollout_stats = TensorUtils.list_of_flat_dict_to_dict_of_list(rollout_stats)
     avg_rollout_stats = { k : np.mean(rollout_stats[k]) for k in rollout_stats }
     avg_rollout_stats["Num_Success"] = np.sum(rollout_stats["Success_Rate"])
     print("Average Rollout Stats")
     print(json.dumps(avg_rollout_stats, indent=4))
 
-
-    # wandb_run.log({"Success Rate": avg_rollout_stats["Num_Success"]}) #Tracking Success Rate = ( # of Success / # of Rollouts )
-    # wandb.finish()
 
     if write_video:
         video_writer.close()

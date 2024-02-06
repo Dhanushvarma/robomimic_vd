@@ -223,6 +223,12 @@ def run_rollout(
         for step_i in range(horizon):
 
             # get action from policy
+
+            # HACK(dhanush) : WHEN ROLLING OUT THE CONCAT APPROACH, WE NEED TO PROVIDE SOME FAKE GAZE LOL
+            if 'human_gaze' in policy.__dict__['policy'].__dict__['obs_config']['planner']['modalities']['obs']['low_dim']:
+                ob_dict.update({'human_gaze' : np.random.rand(2)})
+                # goal_dict.update({'human_gaze' : np.random.rand(2)})
+
             ac = policy(ob=ob_dict, goal=goal_dict)
 
             # play action

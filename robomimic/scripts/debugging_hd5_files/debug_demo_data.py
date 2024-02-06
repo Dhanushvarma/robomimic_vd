@@ -16,4 +16,5 @@ def read_actions_states(file_path):
 # read_actions_states("/home/dpenmets/LIRA_work/robomimic_vd/robomimic/scripts/final_cfgs/demo_data/28_JAN/28_27_combined.hdf5")
 # read_actions_states("/home/dpenmets/LIRA_work/robomimic_vd/robomimic/scripts/final_cfgs/demo_data/28_JAN/28_27_combined_demos.hdf5")
 # read_actions_states("/home/dpenmets/LIRA_work/robomimic_vd/robomimic/scripts/final_cfgs/demo_data_with_gaze/low_dim.hdf5")
-read_actions_states("/home/dpenmets/LIRA_work/robomimic_vd/robomimic/scripts/final_cfgs/demo_data_with_gaze/demo.hdf5")
+# read_actions_states("/home/dpenmets/LIRA_work/robomimic_vd/robomimic/scripts/final_cfgs/demo_data_with_gaze/demo.hdf5")
+read_actions_states("/home/dpenmets/LIRA_work/robomimic_vd/robomimic/scripts/final_cfgs/demo_data_with_gaze/low_dim_gaze.hdf5")

@@ -32,7 +32,7 @@ class MLP_trainer:
         self.config_file = os.path.join(self.cpt_path, 'config.yaml')
 
         # Initialize directories and files based on resume flag
-        # CU.initialize_directories_and_files(self.cpt_path, self.checkpoints_dir, self.model_file, self.config_file, self.cfg['resume'])
+        CU.initialize_directories_and_files(self.cpt_path, self.checkpoints_dir, self.model_file, self.config_file, self.cfg,resume=False)
     
 
         # Stuff needed for the Train Loop
@@ -129,7 +129,7 @@ class MLP_trainer:
 
             if epoch % self.cfg['log_frequency'] == 0:
                 print(f"Epoch {epoch}: Average Loss: {avg_loss:.4f}")
-                self.save_checkpoint()
+                self.save_checkpoint(epoch=epoch)
 
         # Save the final model
         torch.save(self.model.state_dict(), self.model_file)

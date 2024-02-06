@@ -65,7 +65,7 @@ def get_data_loader(dataset_path):
         ),
         load_next_obs=True,
         frame_stack=1,
-        seq_length=10,                  # length-10 temporal sequences
+        seq_length=50,                  # length-10 temporal sequences
         pad_frame_stack=True,
         pad_seq_length=True,            # pad last obs per trajectory to ensure all sequences are sampled
         get_pad_mask=False,
@@ -110,7 +110,7 @@ def process_batch_for_training(batch):
     # remove temporal batches for all except scalar signals (to be compatible with model outputs)
     input_batch["obs"] = { k: batch["obs"][k][:, 0, :] for k in batch["obs"] }
     # extract multi-horizon subgoal target
-    subgoal_horizon = 10 #TODO(dhanush): move this from here
+    subgoal_horizon = 50 #TODO(dhanush): move this from here
     input_batch["subgoals"] = {k: batch["next_obs"][k][:, subgoal_horizon - 1, :] for k in batch["next_obs"]}
     input_batch["target_subgoals"] = input_batch["subgoals"] #NOTE(dhanush) : Both the subgoals and the target subgoals are the samething
     input_batch["goal_obs"] = batch.get("goal_obs", None) # goals may not be present

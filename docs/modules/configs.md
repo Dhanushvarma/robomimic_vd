@@ -70,7 +70,7 @@ from robomimic.config import config_factory
 config = config_factory("bc")
 
 # update defaults with config json
-with open("/path/to/config.json", "r") as f:
+with open("/path/to/vanilla.json", "r") as f:
     ext_config_json = json.load(f)
 config.update(ext_config_json)
 ```
