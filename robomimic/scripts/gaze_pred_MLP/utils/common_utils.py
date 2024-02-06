@@ -88,5 +88,7 @@ def negative_log_likelihood_loss(target_x, mean_x, std_x, target_y, mean_y, std_
     
     log_prob_x = normal_x.log_prob(target_x)
     log_prob_y = normal_y.log_prob(target_y)
+
+    import pdb; pdb.set_trace()
     
     return -log_prob_x.mean() - log_prob_y.mean()  # Combine losses for both dimensions

@@ -104,6 +104,8 @@ class MLP_trainer:
                 # Forward pass
                 mean_x, std_x, mean_y, std_y = self.model(input_data)
 
+                # import pdb; pdb.set_trace()
+
                 # Calculate the negative log likelihood loss for each dimension separately
                 loss = CU.negative_log_likelihood_loss(target_x, mean_x[:, 0], std_x[:, 0], target_y, mean_y[:, 1], std_y[:, 1]) 
 

@@ -12,7 +12,7 @@ class GaussianMLP(nn.Module):
         self.fc1 = nn.Linear(input_dim, hidden_dim)
         self.relu = nn.ReLU()
         self.fc2 = nn.Linear(hidden_dim, hidden_dim)
-        self.fc3 = nn.Linear(hidden_dim, output_dim * 2)  # Two times output_dim for mean and std for each dimension
+        self.fc3 = nn.Linear(hidden_dim, output_dim)  # Two times output_dim for mean and std for each dimension
 
     def forward(self, x):
         x = self.fc1(x)
