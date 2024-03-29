@@ -1,0 +1,568 @@
+
+============= Initialized Observation Utils with Obs Spec =============
+
+using obs modality: low_dim with keys: ['object', 'robot0_gripper_qpos', 'robot0_eef_pos']
+using obs modality: rgb with keys: []
+using obs modality: depth with keys: []
+using obs modality: scan with keys: []
+
+============= Loaded Environment Metadata =============
+obs key object with shape (23,)
+obs key robot0_eef_pos with shape (3,)
+obs key robot0_gripper_qpos with shape (2,)
+[robosuite WARNING] No private macro file found! (macros.py:53)
+[robosuite WARNING] It is recommended to use a private macro file (macros.py:54)
+[robosuite WARNING] To setup, run: python /home/dhanush/robosuite_vd/robosuite/scripts/setup_macros.py (macros.py:55)
+Created environment with name Lifteither
+Action size is 7
+Lifteither
+{
+    "camera_depths": false,
+    "controller_configs": {
+        "control_delta": true,
+        "damping_ratio": 1,
+        "damping_ratio_limits": [
+            0,
+            10
+        ],
+        "impedance_mode": "fixed",
+        "input_max": 1,
+        "input_min": -1,
+        "interpolation": null,
+        "kp": 700,
+        "kp_limits": [
+            0,
+            300
+        ],
+        "orientation_limits": null,
+        "output_max": [
+            0.05,
+            0.05,
+            0.05,
+            0.5,
+            0.5,
+            0.5
+        ],
+        "output_min": [
+            -0.05,
+            -0.05,
+            -0.05,
+            -0.5,
+            -0.5,
+            -0.5
+        ],
+        "position_limits": null,
+        "ramp_ratio": 0.2,
+        "type": "OSC_POSE",
+        "uncouple_pos_ori": true
+    },
+    "has_offscreen_renderer": true,
+    "has_renderer": false,
+    "ignore_done": true,
+    "render_gpu_device_id": 0,
+    "reward_shaping": false,
+    "robots": "Panda",
+    "use_camera_obs": false,
+    "use_object_obs": true
+}
+
+ObservationKeyToModalityDict: latent not found, adding latent to mapping with assumed low_dim modality!
+
+============= Model Summary =============
+ObservationKeyToModalityDict: mean not found, adding mean to mapping with assumed low_dim modality!
+ObservationKeyToModalityDict: logvar not found, adding logvar to mapping with assumed low_dim modality!
+ObservationKeyToModalityDict: weight not found, adding weight to mapping with assumed low_dim modality!
+ObservationKeyToModalityDict: action not found, adding action to mapping with assumed low_dim modality!
+HBC(subgoal_horizon=25, actor_horizon=3, subgoal_update_interval=25, mode=separate, actor_use_random_subgoals=False)
+Planner:
+  GL_VAE (
+    ModuleDict(
+      (goal_network): VAE(
+        (nets): ModuleDict(
+          (encoder): MIMO_MLP(
+              encoder=ObservationGroupEncoder(
+                  group=input
+                  ObservationEncoder(
+                      Key(
+                          name=robot0_eef_pos
+                          shape=[3]
+                          modality=low_dim
+                          randomizer=None
+                          net=None
+                          sharing_from=None
+                      )
+                      output_shape=[3]
+                  )
+                  group=condition
+                  ObservationEncoder(
+                      Key(
+                          name=robot0_eef_pos
+                          shape=[3]
+                          modality=low_dim
+                          randomizer=None
+                          net=None
+                          sharing_from=None
+                      )
+                      output_shape=[3]
+                  )
+              )
+      
+              mlp=MLP(
+                  input_dim=6
+                  output_dim=1024
+                  layer_dims=[1024]
+                  layer_func=Linear
+                  dropout=None
+                  act=ReLU
+                  output_act=ReLU
+              )
+      
+              decoder=ObservationDecoder(
+                  Key(
+                      name=mean
+                      shape=(16,)
+                      modality=low_dim
+                      net=(Linear(in_features=1024, out_features=16, bias=True))
+                  )
+                  Key(
+                      name=logvar
+                      shape=(16,)
+                      modality=low_dim
+                      net=(Linear(in_features=1024, out_features=16, bias=True))
+                  )
+              )
+          )
+          (decoder): MIMO_MLP(
+              encoder=ObservationGroupEncoder(
+                  group=input
+                  ObservationEncoder(
+                      Key(
+                          name=latent
+                          shape=(16,)
+                          modality=low_dim
+                          randomizer=None
+                          net=None
+                          sharing_from=None
+                      )
+                      output_shape=[16]
+                  )
+                  group=condition
+                  ObservationEncoder(
+                      Key(
+                          name=robot0_eef_pos
+                          shape=[3]
+                          modality=low_dim
+                          randomizer=None
+                          net=None
+                          sharing_from=None
+                      )
+                      output_shape=[3]
+                  )
+              )
+      
+              mlp=MLP(
+                  input_dim=19
+                  output_dim=1024
+                  layer_dims=[1024]
+                  layer_func=Linear
+                  dropout=None
+                  act=ReLU
+                  output_act=ReLU
+              )
+      
+              decoder=ObservationDecoder(
+                  Key(
+                      name=robot0_eef_pos
+                      shape=[3]
+                      modality=low_dim
+                      net=(Linear(in_features=1024, out_features=3, bias=True))
+                  )
+              )
+          )
+          (prior): GaussianPrior(
+              latent_dim=16
+              latent_clip=None
+              learnable=True
+              input_dependent=True
+              use_gmm=True
+              gmm_num_nodes=10
+              gmm_learn_weights=True
+      
+              prior_module=MIMO_MLP(
+                  encoder=ObservationGroupEncoder(
+                      group=obs
+                      ObservationEncoder(
+                          Key(
+                              name=robot0_eef_pos
+                              shape=[3]
+                              modality=low_dim
+                              randomizer=None
+                              net=None
+                              sharing_from=None
+                          )
+                          output_shape=[3]
+                      )
+                  )
+      
+                  mlp=MLP(
+                      input_dim=3
+                      output_dim=1024
+                      layer_dims=[1024]
+                      layer_func=Linear
+                      dropout=None
+                      act=ReLU
+                      output_act=ReLU
+                  )
+      
+                  decoder=ObservationDecoder(
+                      Key(
+                          name=mean
+                          shape=(10, 16)
+                          modality=low_dim
+                          net=(Linear(in_features=1024, out_features=160, bias=True))
+                      )
+                      Key(
+                          name=logvar
+                          shape=(10, 16)
+                          modality=low_dim
+                          net=(Linear(in_features=1024, out_features=160, bias=True))
+                      )
+                      Key(
+                          name=weight
+                          shape=(10,)
+                          modality=low_dim
+                          net=(Linear(in_features=1024, out_features=10, bias=True))
+                      )
+                  )
+              )
+              prior_params=ParameterDict()
+          )
+        )
+      )
+    )
+  )
+
+Policy:
+  BC_RNN (
+    ModuleDict(
+      (policy): RNNActorNetwork(
+          action_dim=7
+  
+          encoder=ObservationGroupEncoder(
+              group=obs
+              ObservationEncoder(
+                  Key(
+                      name=object
+                      shape=[23]
+                      modality=low_dim
+                      randomizer=None
+                      net=None
+                      sharing_from=None
+                  )
+                  Key(
+                      name=robot0_eef_pos
+                      shape=[3]
+                      modality=low_dim
+                      randomizer=None
+                      net=None
+                      sharing_from=None
+                  )
+                  Key(
+                      name=robot0_gripper_qpos
+                      shape=[2]
+                      modality=low_dim
+                      randomizer=None
+                      net=None
+                      sharing_from=None
+                  )
+                  output_shape=[28]
+              )
+          )
+  
+          rnn=RNN_Base(
+            (per_step_net): ObservationDecoder(
+                Key(
+                    name=action
+                    shape=(7,)
+                    modality=low_dim
+                    net=(Linear(in_features=400, out_features=7, bias=True))
+                )
+            )
+            (nets): LSTM(28, 400, num_layers=2, batch_first=True)
+          )
+      )
+    )
+  )
+
+SequenceDataset: loading dataset into memory...
+  0%|          | 0/173 [00:00<?, ?it/s]100%|##########| 173/173 [00:00<00:00, 1776.17it/s]
+SequenceDataset: caching get_item calls...
+  0%|          | 0/27948 [00:00<?, ?it/s] 10%|#         | 2877/27948 [00:00<00:00, 28768.52it/s] 21%|##        | 5754/27948 [00:00<00:00, 28633.08it/s] 31%|###       | 8618/27948 [00:00<00:00, 28559.21it/s] 41%|####1     | 11496/27948 [00:00<00:00, 28642.69it/s] 51%|#####1    | 14361/27948 [00:00<00:00, 28595.31it/s] 62%|######1   | 17264/27948 [00:00<00:00, 28741.88it/s] 72%|#######2  | 20139/27948 [00:00<00:00, 28740.85it/s] 82%|########2 | 23018/27948 [00:00<00:00, 28754.00it/s] 93%|#########2| 25894/27948 [00:00<00:00, 28713.91it/s]100%|##########| 27948/27948 [00:00<00:00, 28678.48it/s]
+SequenceDataset: loading dataset into memory...
+  0%|          | 0/19 [00:00<?, ?it/s]100%|##########| 19/19 [00:00<00:00, 1846.90it/s]
+SequenceDataset: caching get_item calls...
+  0%|          | 0/3329 [00:00<?, ?it/s] 88%|########7 | 2923/3329 [00:00<00:00, 29225.64it/s]100%|##########| 3329/3329 [00:00<00:00, 29164.89it/s]
+
+============= Training Dataset =============
+SequenceDataset (
+	path=/home/dhanush/robomimic_vd/robomimic/scripts/dhanush_ws/DATA/MARCH_16_LE_DS/low_dim.hdf5
+	obs_keys=('object', 'robot0_eef_pos', 'robot0_gripper_qpos')
+	seq_length=25
+	filter_key=train
+	frame_stack=1
+	pad_seq_length=True
+	pad_frame_stack=True
+	goal_mode=none
+	cache_mode=all
+	num_demos=173
+	num_sequences=27948
+)
+
+
+============= Validation Dataset =============
+SequenceDataset (
+	path=/home/dhanush/robomimic_vd/robomimic/scripts/dhanush_ws/DATA/MARCH_16_LE_DS/low_dim.hdf5
+	obs_keys=('object', 'robot0_eef_pos', 'robot0_gripper_qpos')
+	seq_length=25
+	filter_key=valid
+	frame_stack=1
+	pad_seq_length=True
+	pad_frame_stack=True
+	goal_mode=none
+	cache_mode=all
+	num_demos=19
+	num_sequences=3329
+)
+
+**************************************************
+Warnings generated by robomimic have been duplicated here (from above) for convenience. Please check them carefully.
+[33mROBOMIMIC WARNING(
+    No private macro file found!
+    It is recommended to use a private macro file
+    To setup, run: python /home/dhanush/robomimic_vd/robomimic/scripts/setup_macros.py
+)[0m
+**************************************************
+
+  0%|          | 0/100 [00:00<?, ?it/s]  1%|1         | 1/100 [00:00<00:17,  5.74it/s]  6%|6         | 6/100 [00:00<00:03, 25.12it/s] 11%|#1        | 11/100 [00:00<00:02, 32.77it/s] 16%|#6        | 16/100 [00:00<00:02, 37.89it/s] 21%|##1       | 21/100 [00:00<00:01, 40.14it/s] 26%|##6       | 26/100 [00:00<00:01, 41.73it/s] 31%|###1      | 31/100 [00:00<00:01, 42.16it/s] 36%|###6      | 36/100 [00:00<00:01, 44.01it/s] 41%|####1     | 41/100 [00:01<00:01, 45.04it/s] 46%|####6     | 46/100 [00:01<00:01, 45.09it/s] 51%|#####1    | 51/100 [00:01<00:01, 45.76it/s] 56%|#####6    | 56/100 [00:01<00:00, 46.03it/s] 62%|######2   | 62/100 [00:01<00:00, 47.95it/s] 67%|######7   | 67/100 [00:01<00:00, 47.57it/s] 73%|#######3  | 73/100 [00:01<00:00, 48.68it/s] 78%|#######8  | 78/100 [00:01<00:00, 46.91it/s] 83%|########2 | 83/100 [00:01<00:00, 47.21it/s] 88%|########8 | 88/100 [00:02<00:00, 47.71it/s] 94%|#########3| 94/100 [00:02<00:00, 49.27it/s] 99%|#########9| 99/100 [00:02<00:00, 47.91it/s]100%|##########| 100/100 [00:02<00:00, 43.87it/s]
+Train Epoch 1
+{
+    "Actor/Cosine_Loss": 0.7109151723980903,
+    "Actor/L1_Loss": 0.02916533324867487,
+    "Actor/L2_Loss": 0.0630049073882401,
+    "Actor/Loss": 0.0630049073882401,
+    "Actor/Optimizer/policy0_lr": 0.0010000000000000002,
+    "Actor/Policy_Grad_Norms": 1.4093356049274757,
+    "Loss": 0.0854890341637656,
+    "Planner/Encoder_Variance": 0.34514265969395636,
+    "Planner/Grad_Norms": 0.9458835114396631,
+    "Planner/KL_Loss": 0.6076600129529833,
+    "Planner/Loss": 0.022484126775525512,
+    "Planner/Optimizer/goal_network0_lr": 0.0010000000000000002,
+    "Planner/Reconstruction_Loss": 0.022180296857841314,
+    "Planner/goal_loss": 0.022484126775525512,
+    "Planner/kl_loss": 0.6076600129529833,
+    "Planner/recons_loss": 0.022180296857841314,
+    "Time_Data_Loading": 0.002374736467997233,
+    "Time_Epoch": 0.03800473610560099,
+    "Time_Log_Info": 0.0022178371747334797,
+    "Time_Process_Batch": 0.005234150091807047,
+    "Time_Train_Batch": 0.028115284442901612
+}
+  0%|          | 0/10 [00:00<?, ?it/s]100%|##########| 10/10 [00:00<00:00, 126.71it/s]
+Validation Epoch 1
+{
+    "Actor/Cosine_Loss": 0.5122215479612351,
+    "Actor/L1_Loss": 0.018658342771232128,
+    "Actor/L2_Loss": 0.041304537653923036,
+    "Actor/Loss": 0.041304537653923036,
+    "Actor/Optimizer/policy0_lr": 0.0010000000000000002,
+    "Loss": 0.04349072002805769,
+    "Planner/Encoder_Variance": 0.15970077365636826,
+    "Planner/KL_Loss": 0.3845756083726883,
+    "Planner/Loss": 0.00218618237413466,
+    "Planner/Optimizer/goal_network0_lr": 0.0010000000000000002,
+    "Planner/Reconstruction_Loss": 0.001993894577026367,
+    "Planner/goal_loss": 0.00218618237413466,
+    "Planner/kl_loss": 0.3845756083726883,
+    "Planner/recons_loss": 0.001993894577026367,
+    "Time_Data_Loading": 0.0002445856730143229,
+    "Time_Epoch": 0.0013314247131347655,
+    "Time_Log_Info": 0.00017743110656738282,
+    "Time_Process_Batch": 0.0005582849184672038,
+    "Time_Train_Batch": 0.0003339727719624837
+}
+
+Epoch 1 Memory Usage: 1966 MB
+
+  0%|          | 0/100 [00:00<?, ?it/s]  5%|5         | 5/100 [00:00<00:02, 42.89it/s] 10%|#         | 10/100 [00:00<00:01, 45.18it/s] 15%|#5        | 15/100 [00:00<00:01, 45.34it/s] 20%|##        | 20/100 [00:00<00:01, 46.67it/s] 25%|##5       | 25/100 [00:00<00:01, 47.36it/s] 30%|###       | 30/100 [00:00<00:01, 47.92it/s] 35%|###5      | 35/100 [00:00<00:01, 47.06it/s] 41%|####1     | 41/100 [00:00<00:01, 49.02it/s] 46%|####6     | 46/100 [00:00<00:01, 48.80it/s] 51%|#####1    | 51/100 [00:01<00:01, 47.27it/s] 56%|#####6    | 56/100 [00:01<00:00, 46.44it/s] 62%|######2   | 62/100 [00:01<00:00, 48.34it/s] 67%|######7   | 67/100 [00:01<00:00, 47.80it/s] 72%|#######2  | 72/100 [00:01<00:00, 46.79it/s] 77%|#######7  | 77/100 [00:01<00:00, 46.97it/s] 82%|########2 | 82/100 [00:01<00:00, 45.56it/s] 87%|########7 | 87/100 [00:01<00:00, 45.81it/s] 92%|#########2| 92/100 [00:01<00:00, 45.78it/s] 97%|#########7| 97/100 [00:02<00:00, 46.09it/s]100%|##########| 100/100 [00:02<00:00, 46.87it/s]
+Train Epoch 2
+{
+    "Actor/Cosine_Loss": 0.4599646818637848,
+    "Actor/L1_Loss": 0.014523735982365907,
+    "Actor/L2_Loss": 0.032059161439538,
+    "Actor/Loss": 0.032059161439538,
+    "Actor/Optimizer/policy0_lr": 0.0010000000000000002,
+    "Actor/Policy_Grad_Norms": 1.2083762795834092,
+    "Loss": 0.033445730752428064,
+    "Planner/Encoder_Variance": 0.14540422305464745,
+    "Planner/Grad_Norms": 0.016156510840871205,
+    "Planner/KL_Loss": 0.38193463169038294,
+    "Planner/Loss": 0.0013865693128900603,
+    "Planner/Optimizer/goal_network0_lr": 0.0010000000000000002,
+    "Planner/Reconstruction_Loss": 0.0011956019874196499,
+    "Planner/goal_loss": 0.0013865693128900603,
+    "Planner/kl_loss": 0.38193463169038294,
+    "Planner/recons_loss": 0.0011956019874196499,
+    "Time_Data_Loading": 0.002371978759765625,
+    "Time_Epoch": 0.03557304541269938,
+    "Time_Log_Info": 0.0018526871999104818,
+    "Time_Process_Batch": 0.0053034583727518715,
+    "Time_Train_Batch": 0.025982820987701417
+}
+  0%|          | 0/10 [00:00<?, ?it/s]100%|##########| 10/10 [00:00<00:00, 116.99it/s]
+Validation Epoch 2
+{
+    "Actor/Cosine_Loss": 0.47430515885353086,
+    "Actor/L1_Loss": 0.01412219638004899,
+    "Actor/L2_Loss": 0.03229553643614054,
+    "Actor/Loss": 0.03229553643614054,
+    "Actor/Optimizer/policy0_lr": 0.0010000000000000002,
+    "Loss": 0.033286962390411644,
+    "Planner/Encoder_Variance": 0.14770882874727248,
+    "Planner/KL_Loss": 0.25731220543384553,
+    "Planner/Loss": 0.0009914259542711079,
+    "Planner/Optimizer/goal_network0_lr": 0.0010000000000000002,
+    "Planner/Reconstruction_Loss": 0.0008627698582131416,
+    "Planner/goal_loss": 0.0009914259542711079,
+    "Planner/kl_loss": 0.25731220543384553,
+    "Planner/recons_loss": 0.0008627698582131416,
+    "Time_Data_Loading": 0.0002337217330932617,
+    "Time_Epoch": 0.0014431039492289225,
+    "Time_Log_Info": 0.00017020304997762044,
+    "Time_Process_Batch": 0.0006315787633260091,
+    "Time_Train_Batch": 0.00038791497548421223
+}
+
+Epoch 2 Memory Usage: 1967 MB
+
+  0%|          | 0/100 [00:00<?, ?it/s]  5%|5         | 5/100 [00:00<00:02, 44.51it/s] 10%|#         | 10/100 [00:00<00:01, 47.42it/s] 15%|#5        | 15/100 [00:00<00:01, 47.20it/s] 20%|##        | 20/100 [00:00<00:01, 47.58it/s] 25%|##5       | 25/100 [00:00<00:01, 47.76it/s] 30%|###       | 30/100 [00:00<00:01, 47.12it/s] 35%|###5      | 35/100 [00:00<00:01, 46.74it/s] 40%|####      | 40/100 [00:00<00:01, 45.22it/s] 45%|####5     | 45/100 [00:00<00:01, 46.37it/s] 50%|#####     | 50/100 [00:01<00:01, 46.29it/s] 55%|#####5    | 55/100 [00:01<00:00, 45.11it/s] 60%|######    | 60/100 [00:01<00:00, 46.00it/s] 65%|######5   | 65/100 [00:01<00:00, 46.29it/s] 70%|#######   | 70/100 [00:01<00:00, 45.91it/s] 76%|#######6  | 76/100 [00:01<00:00, 46.89it/s] 81%|########1 | 81/100 [00:01<00:00, 47.35it/s] 87%|########7 | 87/100 [00:01<00:00, 49.49it/s] 92%|#########2| 92/100 [00:01<00:00, 49.35it/s] 97%|#########7| 97/100 [00:02<00:00, 48.32it/s]100%|##########| 100/100 [00:02<00:00, 47.14it/s]
+Train Epoch 3
+{
+    "Actor/Cosine_Loss": 0.41527935832738877,
+    "Actor/L1_Loss": 0.011022264696657657,
+    "Actor/L2_Loss": 0.024489864269271494,
+    "Actor/Loss": 0.024489864269271494,
+    "Actor/Optimizer/policy0_lr": 0.0010000000000000002,
+    "Actor/Policy_Grad_Norms": 0.8294560867723192,
+    "Loss": 0.025539389312034474,
+    "Planner/Encoder_Variance": 0.14596182703971863,
+    "Planner/Grad_Norms": 0.008227963096273432,
+    "Planner/KL_Loss": 0.35037256851792337,
+    "Planner/Loss": 0.00104952504276298,
+    "Planner/Optimizer/goal_network0_lr": 0.0010000000000000002,
+    "Planner/Reconstruction_Loss": 0.0008743387501453981,
+    "Planner/goal_loss": 0.00104952504276298,
+    "Planner/kl_loss": 0.35037256851792337,
+    "Planner/recons_loss": 0.0008743387501453981,
+    "Time_Data_Loading": 0.002402178446451823,
+    "Time_Epoch": 0.0353700319925944,
+    "Time_Log_Info": 0.0017099817593892416,
+    "Time_Process_Batch": 0.005479995409647624,
+    "Time_Train_Batch": 0.02571680148442586
+}
+  0%|          | 0/10 [00:00<?, ?it/s]100%|##########| 10/10 [00:00<00:00, 117.16it/s]
+Validation Epoch 3
+{
+    "Actor/Cosine_Loss": 0.5135677486658097,
+    "Actor/L1_Loss": 0.018002170976251362,
+    "Actor/L2_Loss": 0.04235262013971806,
+    "Actor/Loss": 0.04235262013971806,
+    "Actor/Optimizer/policy0_lr": 0.0010000000000000002,
+    "Loss": 0.04403694130014628,
+    "Planner/Encoder_Variance": 0.15497314780950547,
+    "Planner/KL_Loss": 0.9863386750221252,
+    "Planner/Loss": 0.001684321160428226,
+    "Planner/Optimizer/goal_network0_lr": 0.0010000000000000002,
+    "Planner/Reconstruction_Loss": 0.0011911517940461636,
+    "Planner/goal_loss": 0.001684321160428226,
+    "Planner/kl_loss": 0.9863386750221252,
+    "Planner/recons_loss": 0.0011911517940461636,
+    "Time_Data_Loading": 0.00023281176884969076,
+    "Time_Epoch": 0.0014368812243143716,
+    "Time_Log_Info": 0.00014238357543945314,
+    "Time_Process_Batch": 0.000700680414835612,
+    "Time_Train_Batch": 0.0003455201784769694
+}
+
+Epoch 3 Memory Usage: 1967 MB
+
+  0%|          | 0/100 [00:00<?, ?it/s]  5%|5         | 5/100 [00:00<00:02, 45.21it/s] 10%|#         | 10/100 [00:00<00:01, 46.86it/s] 15%|#5        | 15/100 [00:00<00:01, 44.83it/s] 20%|##        | 20/100 [00:00<00:01, 46.21it/s] 25%|##5       | 25/100 [00:00<00:01, 46.70it/s] 30%|###       | 30/100 [00:00<00:01, 46.63it/s] 35%|###5      | 35/100 [00:00<00:01, 45.64it/s] 40%|####      | 40/100 [00:00<00:01, 46.79it/s] 45%|####5     | 45/100 [00:00<00:01, 47.20it/s] 50%|#####     | 50/100 [00:01<00:01, 47.16it/s] 55%|#####5    | 55/100 [00:01<00:00, 47.67it/s] 60%|######    | 60/100 [00:01<00:00, 46.26it/s] 65%|######5   | 65/100 [00:01<00:00, 46.87it/s] 70%|#######   | 70/100 [00:01<00:00, 45.35it/s] 75%|#######5  | 75/100 [00:01<00:00, 46.30it/s] 80%|########  | 80/100 [00:01<00:00, 46.57it/s] 85%|########5 | 85/100 [00:01<00:00, 45.85it/s] 90%|######### | 90/100 [00:01<00:00, 44.94it/s] 95%|#########5| 95/100 [00:02<00:00, 45.78it/s]100%|##########| 100/100 [00:02<00:00, 46.37it/s]100%|##########| 100/100 [00:02<00:00, 46.30it/s]
+Train Epoch 4
+{
+    "Actor/Cosine_Loss": 0.38859927266836164,
+    "Actor/L1_Loss": 0.009700994794256986,
+    "Actor/L2_Loss": 0.02163055925630033,
+    "Actor/Loss": 0.02163055925630033,
+    "Actor/Optimizer/policy0_lr": 0.0010000000000000002,
+    "Actor/Policy_Grad_Norms": 1.269912523153688,
+    "Loss": 0.02265815464663319,
+    "Planner/Encoder_Variance": 0.15495041131973267,
+    "Planner/Grad_Norms": 0.0077731424231206325,
+    "Planner/KL_Loss": 0.3457682739198208,
+    "Planner/Loss": 0.0010275953903328627,
+    "Planner/Optimizer/goal_network0_lr": 0.0010000000000000002,
+    "Planner/Reconstruction_Loss": 0.0008547112444648519,
+    "Planner/goal_loss": 0.0010275953903328627,
+    "Planner/kl_loss": 0.3457682739198208,
+    "Planner/recons_loss": 0.0008547112444648519,
+    "Time_Data_Loading": 0.0023494521776835126,
+    "Time_Epoch": 0.03601248264312744,
+    "Time_Log_Info": 0.0018549680709838868,
+    "Time_Process_Batch": 0.005352644125620524,
+    "Time_Train_Batch": 0.02639764944712321
+}
+  0%|          | 0/10 [00:00<?, ?it/s]100%|##########| 10/10 [00:00<00:00, 126.59it/s]
+Validation Epoch 4
+{
+    "Actor/Cosine_Loss": 0.6340020298957825,
+    "Actor/L1_Loss": 0.02324674855917692,
+    "Actor/L2_Loss": 0.056923364847898485,
+    "Actor/Loss": 0.056923364847898485,
+    "Actor/Optimizer/policy0_lr": 0.0010000000000000002,
+    "Loss": 0.058023282611975445,
+    "Planner/Encoder_Variance": 0.16044894009828567,
+    "Planner/KL_Loss": 0.46197476983070374,
+    "Planner/Loss": 0.0010999177640769631,
+    "Planner/Optimizer/goal_network0_lr": 0.0010000000000000002,
+    "Planner/Reconstruction_Loss": 0.0008689303474966436,
+    "Planner/goal_loss": 0.0010999177640769631,
+    "Planner/kl_loss": 0.46197476983070374,
+    "Planner/recons_loss": 0.0008689303474966436,
+    "Time_Data_Loading": 0.00023734172185262045,
+    "Time_Epoch": 0.0013282378514607748,
+    "Time_Log_Info": 0.00019810199737548828,
+    "Time_Process_Batch": 0.0004903117815653484,
+    "Time_Train_Batch": 0.00038960774739583336
+}
+
+Epoch 4 Memory Usage: 1967 MB
+
+  0%|          | 0/100 [00:00<?, ?it/s]  5%|5         | 5/100 [00:00<00:02, 47.08it/s] 10%|#         | 10/100 [00:00<00:01, 47.25it/s] 16%|#6        | 16/100 [00:00<00:01, 49.77it/s] 21%|##1       | 21/100 [00:00<00:01, 47.01it/s] 26%|##6       | 26/100 [00:00<00:01, 47.31it/s] 31%|###1      | 31/100 [00:00<00:01, 47.18it/s] 36%|###6      | 36/100 [00:00<00:01, 47.36it/s] 41%|####1     | 41/100 [00:00<00:01, 45.71it/s] 44%|####4     | 44/100 [00:00<00:01, 45.67it/s]
+Traceback (most recent call last):
+  File "train.py", line 427, in <module>
+    main(args)
+  File "train.py", line 378, in main
+    train(config, device=device)
+  File "train.py", line 196, in train
+    step_log = TrainUtils.run_epoch(
+  File "/home/dhanush/robomimic_vd/robomimic/utils/train_utils.py", line 565, in run_epoch
+    info = model.train_on_batch(input_batch, epoch, validate=validate)
+  File "/home/dhanush/robomimic_vd/robomimic/algo/hbc.py", line 199, in train_on_batch
+    info["actor"].update(self.actor.train_on_batch(batch["actor"], epoch, validate=validate))
+  File "/home/dhanush/robomimic_vd/robomimic/algo/bc.py", line 144, in train_on_batch
+    step_info = self._train_step(losses)
+  File "/home/dhanush/robomimic_vd/robomimic/algo/bc.py", line 207, in _train_step
+    policy_grad_norms = TorchUtils.backprop_for_loss(
+  File "/home/dhanush/robomimic_vd/robomimic/utils/torch_utils.py", line 199, in backprop_for_loss
+    grad_norms += p.grad.data.norm(2).pow(2).item()
+KeyboardInterrupt

@@ -74,7 +74,7 @@ import robomimic.utils.tensor_utils as TensorUtils
 import robomimic.utils.obs_utils as ObsUtils
 from robomimic.envs.env_base import EnvBase
 from robomimic.algo import RolloutPolicy, RolloutPolicy_HBC #TODO: one of the main changes
-from screeninfo import get_monitors
+# from screeninfo import get_monitors
 from robomimic.scripts.roll_out_scripts.rollout_utils import *
 
 
@@ -114,7 +114,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
     obs = env.reset_to(state_dict)
 
     # CAMERA TRANSFORMATION MATRIX
-    camera_transformation_matrix = env.get_camera_transform_matrix(camera_names[0], 1440, 3440)  #NOTE(dhanush) : Need to adapt the number as per screen size
+    camera_transformation_matrix = env.get_camera_transform_matrix(camera_names[0], 2160, 3840)  #NOTE(dhanush) : Need to adapt the number as per screen size
 
     results = {}
     video_count = 0  # video frame counter
@@ -128,16 +128,16 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
         traj.update(dict(obs=[], next_obs=[]))
 
     #Gaze Related Stuff
-    gaze_util_obj = GazeUtils.gaze_data_util(3440, 1440)  # TODO: fix the hardcoding
+    gaze_util_obj = GazeUtils.gaze_data_util(3840, 2160)  # TODO: fix the hardcoding
 
     try:
         for step_i in range(0,horizon): #TODO: Check the indexing logic
 
             # gaze_data_dict, gaze_data_raw = gaze_util_obj.gaze_pixels(socket_obj.get_latest_message()) # NOTE(dhanush) : This is where actual gaze is provided
-            #NOTE(dhanush): (pixel_x:1850, pixel_y: 900): corresponds to the green block - FAKE GAZE
-            #NOTE(dhanush): (pixel_x:1600, pixel_y: 900): corresponds to the red block - FAKE GAZE
+            #NOTE(dhanush): (pixel_x:2100, pixel_y: 1350): corresponds to the green block - FAKE GAZE
+            #NOTE(dhanush): (pixel_x:1775, pixel_y: 1350): corresponds to the red block - FAKE GAZE
             
-            gaze_data_dict = {'pixel_x' : 1600, 'pixel_y': 900}
+            gaze_data_dict = {'pixel_x' : 1775, 'pixel_y': 1350}
             gaze_input = np.array([[gaze_data_dict['pixel_x'], gaze_data_dict['pixel_y']]]) # NOTE(dhanush) : CONVERTING INTO REQUIRED FORMAT FOR FUNCTIONS
 
             # --Format of Data -- #
@@ -147,7 +147,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
             # gaze_data_raw['FPOGY']
             #---------------------#
 
-            interval = 50 #NOTE(aliang) : you have to manually change the subgoal update interval
+            interval = 10 #NOTE(aliang) : you have to manually change the subgoal update interval
             #TODO: Currently manually inputting the subgoal update interval, improve this
 
             # Check if time to update subgoal
@@ -159,7 +159,7 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
                 world_points = subgoal_ee_pos(sg_proposals) # NOTE(dhanush) : We extract the EE POS from the subgoal proposals
 
                 #NOTE(dhanush) Projecting the EEF POS onto {RENDER SCREEN} FRAME
-                pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 1440, 3440)  #TODO: check screen dimensions
+                pp_sgs = env.project_points_from_world_to_camera(world_points, camera_transformation_matrix, 2160, 3840)  #TODO: check screen dimensions
 
                 pp_sgs = pp_sgs[:, ::-1] #NOTE(dhanush): ORDER REVERSAL TO GET IN EXPECTED FORMAT
 
@@ -191,13 +191,13 @@ def rollout(policy, env, horizon, render=False, video_writer=None, video_skip=5,
 
             # visualization
             if render:
-                env.render(mode="human", camera_name=camera_names[0], width=3440, height=1440)  #TODO: PREVENT HARDCODING THE SCREEN RESOLUTION
+                env.render(mode="human", camera_name=camera_names[0], width=3840, height=2160)  #TODO: PREVENT HARDCODING THE SCREEN RESOLUTION
                 
             if video_writer is not None:
                 if video_count % video_skip == 0:
                     video_img = []
                     for cam_name in camera_names:
-                        current_frame = env.render(mode="dual", height=1440, width=3440, camera_name=cam_name) #TODO: check dual render in env_robosuite.py
+                        current_frame = env.render(mode="dual", height=2160, width=3840, camera_name=cam_name) #TODO: check dual render in env_robosuite.py
 
                         # NOTE(dhanush) : MARKING GAZE ON VIDEO
                         edited_frame = cv2.drawMarker(np.uint8(current_frame.copy()), (int(gaze_data_dict['pixel_x']), 
